@@ -1,6 +1,11 @@
 import { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Users, FileText } from 'lucide-react';
 
+import { AuthProvider } from '@/components/layout/AuthProvider';
+import { useAuth } from '@/hooks/useAuth';
+import { ToastProvider, useToast } from '@/components/ui/Toast';
+import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { AppShell } from '@/components/layout/AppShell';
 import { type PageId } from '@/components/layout/Sidebar';
 
@@ -12,12 +17,15 @@ import { Modal } from '@/components/ui/Modal';
 import { Divider } from '@/components/ui/Divider';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
-import { ToastProvider, useToast } from '@/components/ui/Toast';
 
 import { type UserProfile, UserRole } from '@/types/user';
 import { CaseStatus } from '@/types/case';
 
-// ─── Usuário fake ─────────────────────────────────────────────────────────────
+import Login from '@/pages/Login';
+import Register from '@/pages/Register';
+import Onboarding from '@/pages/Onboarding';
+
+// ─── Usuário fake para o AppShell ─────────────────────────────────────────────
 
 const MOCK_USER: UserProfile = {
   id: '1',
@@ -28,7 +36,7 @@ const MOCK_USER: UserProfile = {
   createdAt: '2024-01-15T00:00:00Z',
 };
 
-// ─── Mapa de labels de status ─────────────────────────────────────────────────
+// ─── Labels de status ─────────────────────────────────────────────────────────
 
 const STATUS_LABELS: Record<CaseStatus, string> = {
   [CaseStatus.NEW]: 'Novo',
@@ -42,7 +50,7 @@ const STATUS_VARIANTS: Record<CaseStatus, 'novo' | 'ativo' | 'arquivado'> = {
   [CaseStatus.ARCHIVED]: 'arquivado',
 };
 
-// ─── Página de showcase dos componentes ──────────────────────────────────────
+// ─── Showcase do Design System ────────────────────────────────────────────────
 
 function ComponentsShowcase() {
   const { success, error, info } = useToast();
@@ -52,7 +60,6 @@ function ComponentsShowcase() {
 
   return (
     <div className="space-y-10">
-      {/* Cabeçalho da seção */}
       <div>
         <h2 className="text-xl font-bold text-slate-100">Design System</h2>
         <p className="mt-1 text-sm text-slate-500">
@@ -60,7 +67,6 @@ function ComponentsShowcase() {
         </p>
       </div>
 
-      {/* Botões */}
       <section className="space-y-4">
         <Divider label="Button" />
         <div className="flex flex-wrap gap-3">
@@ -88,7 +94,6 @@ function ComponentsShowcase() {
         </div>
       </section>
 
-      {/* Badges */}
       <section className="space-y-4">
         <Divider label="Badge" />
         <div className="flex flex-wrap gap-2">
@@ -102,7 +107,6 @@ function ComponentsShowcase() {
         </div>
       </section>
 
-      {/* Inputs */}
       <section className="space-y-4">
         <Divider label="Input / Select" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
@@ -127,7 +131,6 @@ function ComponentsShowcase() {
         </div>
       </section>
 
-      {/* Toast */}
       <section className="space-y-4">
         <Divider label="Toast" />
         <div className="flex flex-wrap gap-3">
@@ -151,7 +154,6 @@ function ComponentsShowcase() {
         </div>
       </section>
 
-      {/* Modal */}
       <section className="space-y-4">
         <Divider label="Modal" />
         <Button variant="secondary" size="sm" onClick={() => setModalOpen(true)}>
@@ -181,7 +183,6 @@ function ComponentsShowcase() {
         </Modal>
       </section>
 
-      {/* Spinner e EmptyState */}
       <section className="space-y-4">
         <Divider label="Spinner / EmptyState" />
         <div className="flex items-center gap-6">
@@ -202,7 +203,7 @@ function ComponentsShowcase() {
   );
 }
 
-// ─── Placeholder das páginas futuras ─────────────────────────────────────────
+// ─── Placeholder de páginas futuras ──────────────────────────────────────────
 
 function PlaceholderPage({ title, description }: { title: string; description: string }) {
   return (
@@ -219,7 +220,7 @@ function PlaceholderPage({ title, description }: { title: string; description: s
   );
 }
 
-// ─── Roteamento simples por page state ───────────────────────────────────────
+// ─── Conteúdo por página ──────────────────────────────────────────────────────
 
 function PageContent({ page }: { page: PageId }) {
   switch (page) {
@@ -256,22 +257,58 @@ function PageContent({ page }: { page: PageId }) {
   }
 }
 
-// ─── Root App ─────────────────────────────────────────────────────────────────
+// ─── Shell do app (rota /app) ─────────────────────────────────────────────────
 
 function AppInner() {
+  const { user } = useAuth();
   const [activePage, setActivePage] = useState<PageId>('dashboard');
 
   return (
-    <AppShell activePage={activePage} onNavigate={setActivePage} currentUser={MOCK_USER}>
+    <AppShell activePage={activePage} onNavigate={setActivePage} currentUser={user ?? MOCK_USER}>
       <PageContent page={activePage} />
     </AppShell>
   );
 }
 
-export default function App() {
+function AppPage() {
   return (
     <ToastProvider>
       <AppInner />
     </ToastProvider>
+  );
+}
+
+// ─── Root App ─────────────────────────────────────────────────────────────────
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <ToastProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route
+              path="/onboarding"
+              element={
+                <ProtectedRoute>
+                  <Onboarding />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/app/*"
+              element={
+                <ProtectedRoute>
+                  <AppPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </ToastProvider>
+    </AuthProvider>
   );
 }
