@@ -38,18 +38,18 @@
 
 ### Entregáveis
 
-- [ ] `npm create vite@latest` com template `react-ts`
-- [ ] Instalar dependências: `tailwindcss@4`, `motion`, `lucide-react`, `clsx`
-- [ ] Instalar dev deps: `eslint`, `prettier`, `husky`, `lint-staged`
-- [ ] Configurar `tsconfig.json` com `"strict": true` e path alias `@/`
-- [ ] Configurar `vite.config.ts` com `resolve.alias: { '@': '/src' }`
-- [ ] Configurar Tailwind 4 com tokens de cor do design system (indigo, emerald, amber, slate)
-- [ ] Configurar `.eslintrc` + `.prettierrc` (2 espaços, aspas simples, semicolons)
-- [ ] Configurar Husky + lint-staged no pre-commit
-- [ ] Criar estrutura de pastas completa conforme PRD §8
-- [ ] Criar `src/utils/cn.ts` (helper `clsx` + `tailwind-merge`)
-- [ ] Criar `CLAUDE.md` na raiz com convenções do projeto
-- [ ] Verificar `npm run dev` sem erros
+- [x] `npm create vite@latest` com template `react-ts`
+- [x] Instalar dependências: `tailwindcss@4`, `motion`, `lucide-react`, `clsx`
+- [x] Instalar dev deps: `eslint`, `prettier`, `husky`, `lint-staged`
+- [x] Configurar `tsconfig.json` com `"strict": true` e path alias `@/`
+- [x] Configurar `vite.config.ts` com `resolve.alias: { '@': '/src' }`
+- [x] Configurar Tailwind 4 com tokens de cor do design system (indigo, emerald, amber, slate)
+- [x] Configurar `.eslintrc` + `.prettierrc` (2 espaços, aspas simples, semicolons)
+- [x] Configurar Husky + lint-staged no pre-commit
+- [x] Criar estrutura de pastas completa conforme PRD §8
+- [x] Criar `src/utils/cn.ts` (helper `clsx` + `tailwind-merge`)
+- [x] Criar `CLAUDE.md` na raiz com convenções do projeto
+- [x] Verificar `npm run dev` sem erros
 
 ### Commit Final
 
