@@ -23,11 +23,19 @@ dist-ssr
 *.sln
 *.sw?
 
-# Environment variables
+# Environment variables — NUNCA commitar valores reais
 .env
 .env.local
 .env.production
 .env.*.local
 
-# Supabase
+# Supabase local
 .supabase
+
+# Claude Code / MCP — podem conter tokens e connection strings reais
+.mcp.json
+.claude/
+.agents/
+
+# Vite cache
+.vite/
