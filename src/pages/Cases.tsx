@@ -1,10 +1,11 @@
 import { useState, useMemo, type ChangeEvent } from 'react';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, LayoutList, LayoutGrid } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { CaseList } from '@/components/features/CaseList';
+import { KanbanBoard } from '@/components/features/KanbanBoard';
 import { CaseForm } from '@/components/features/CaseForm';
 import { CaseDetail } from '@/components/features/CaseDetail';
 import { ArchiveModal } from '@/components/features/ArchiveModal';
@@ -38,6 +39,24 @@ export default function Cases() {
   const { user } = useAuth();
   const { success } = useToast();
 
+  // View mode: 'list' | 'kanban'
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>(() => {
+    try {
+      return (localStorage.getItem('cases-view-mode') as 'list' | 'kanban') ?? 'list';
+    } catch {
+      return 'list';
+    }
+  });
+
+  const handleSetViewMode = (mode: 'list' | 'kanban') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('cases-view-mode', mode);
+    } catch {
+      // ignore
+    }
+  };
+
   // Estado central
   const [cases, setCases] = useState<CaseRecord[]>(MOCK_CASES);
   const [activeTab, setActiveTab] = useState<CaseStatus>(CaseStatus.NEW);
@@ -49,7 +68,7 @@ export default function Cases() {
   const [showForm, setShowForm] = useState(false);
   const [archivingCase, setArchivingCase] = useState<CaseRecord | null>(null);
 
-  // Casos filtrados para a aba atual
+  // Casos filtrados para a aba atual (view lista)
   const filteredCases = useMemo(() => {
     const isFiltered = Boolean(searchQuery || responsibleFilter);
     return {
@@ -70,6 +89,25 @@ export default function Cases() {
       isFiltered,
     };
   }, [cases, activeTab, searchQuery, responsibleFilter]);
+
+  // Casos filtrados para o Kanban (todos os status, sem filtro de aba)
+  const kanbanCases = useMemo(
+    () =>
+      cases
+        .filter((c) => {
+          if (!searchQuery) return true;
+          return (
+            matchesSearch(c.name, searchQuery) ||
+            matchesSearch(c.cpf, searchQuery) ||
+            matchesSearch(c.code, searchQuery)
+          );
+        })
+        .filter((c) => {
+          if (!responsibleFilter) return true;
+          return c.responsibleId === responsibleFilter;
+        }),
+    [cases, searchQuery, responsibleFilter],
+  );
 
   // Contadores por aba
   const counts = useMemo(
@@ -149,10 +187,39 @@ export default function Cases() {
           <h1 className="text-xl font-bold text-slate-100">Gestão de Casos</h1>
           <p className="mt-0.5 text-sm text-slate-500">{cases.length} casos no sistema</p>
         </div>
-        <Button variant="primary" size="sm" onClick={() => setShowForm(true)}>
-          <Plus className="size-4 -ml-0.5 mr-1.5" strokeWidth={2} />
-          Novo Caso
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Toggle de view */}
+          <div className="flex items-center rounded-lg bg-slate-800 border border-slate-700 p-0.5">
+            <button
+              aria-label="Visualização em lista"
+              onClick={() => handleSetViewMode('list')}
+              className={cn(
+                'flex items-center justify-center size-7 rounded-md transition-colors',
+                viewMode === 'list'
+                  ? 'bg-slate-700 text-slate-100'
+                  : 'text-slate-500 hover:text-slate-300',
+              )}
+            >
+              <LayoutList className="size-3.5" strokeWidth={1.75} />
+            </button>
+            <button
+              aria-label="Visualização Kanban"
+              onClick={() => handleSetViewMode('kanban')}
+              className={cn(
+                'flex items-center justify-center size-7 rounded-md transition-colors',
+                viewMode === 'kanban'
+                  ? 'bg-slate-700 text-slate-100'
+                  : 'text-slate-500 hover:text-slate-300',
+              )}
+            >
+              <LayoutGrid className="size-3.5" strokeWidth={1.75} />
+            </button>
+          </div>
+          <Button variant="primary" size="sm" onClick={() => setShowForm(true)}>
+            <Plus className="size-4 -ml-0.5 mr-1.5" strokeWidth={2} />
+            Novo Caso
+          </Button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -184,50 +251,87 @@ export default function Cases() {
         />
       </div>
 
-      {/* Abas com indicador animado */}
-      <div className="flex items-center gap-1 rounded-xl bg-slate-800/60 p-1 w-fit" role="tablist">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={cn(
-              'relative flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
-              activeTab === tab.id ? 'text-slate-100' : 'text-slate-500 hover:text-slate-300',
-            )}
-          >
-            {activeTab === tab.id && (
-              <motion.div
-                layoutId="cases-tab-indicator"
-                className="absolute inset-0 rounded-lg bg-slate-700 ring-1 ring-slate-600/50"
-                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-              />
-            )}
-            <span className="relative z-10">{tab.label}</span>
-            <Badge variant={tab.variant} className="relative z-10">
-              {counts[tab.id]}
-            </Badge>
-          </button>
-        ))}
-      </div>
-
-      {/* Lista animada por aba */}
       <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: 0.15 }}
-        >
-          <CaseList
-            key={`${activeTab}-${searchQuery}-${responsibleFilter}`}
-            cases={filteredCases.items}
+        {viewMode === 'kanban' ? (
+          /* ── Kanban Board ────────────────────────────────────────────── */
+          <KanbanBoard
+            key="kanban"
+            cases={kanbanCases}
             onSelectCase={setSelectedCase}
-            emptyMessage={EMPTY_MESSAGES[activeTab](filteredCases.isFiltered)}
+            onCasesChange={(updated) =>
+              // Usa o array 'updated' como fonte de ordem e dados;
+              // casos que não aparecem no updated são preservados no fim.
+              setCases((prev) => {
+                const updatedIds = new Set(updated.map((u) => u.id));
+                const rest = prev.filter((c) => !updatedIds.has(c.id));
+                return [...updated, ...rest];
+              })
+            }
+            technicians={MOCK_TECHNICIANS}
+            nextCode={nextCode}
+            currentUserId={user?.id ?? 'admin'}
+            onCaseCreate={handleCreate}
           />
-        </motion.div>
+        ) : (
+          /* ── View Lista: abas + grid ─────────────────────────────────── */
+          <motion.div
+            key="list"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="space-y-6"
+          >
+            {/* Abas com indicador animado */}
+            <div
+              className="flex items-center gap-1 rounded-xl bg-slate-800/60 p-1 w-fit"
+              role="tablist"
+            >
+              {TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    'relative flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                    activeTab === tab.id ? 'text-slate-100' : 'text-slate-500 hover:text-slate-300',
+                  )}
+                >
+                  {activeTab === tab.id && (
+                    <motion.div
+                      layoutId="cases-tab-indicator"
+                      className="absolute inset-0 rounded-lg bg-slate-700 ring-1 ring-slate-600/50"
+                      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                    />
+                  )}
+                  <span className="relative z-10">{tab.label}</span>
+                  <Badge variant={tab.variant} className="relative z-10">
+                    {counts[tab.id]}
+                  </Badge>
+                </button>
+              ))}
+            </div>
+
+            {/* Lista animada por aba */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.15 }}
+              >
+                <CaseList
+                  key={`${activeTab}-${searchQuery}-${responsibleFilter}`}
+                  cases={filteredCases.items}
+                  onSelectCase={setSelectedCase}
+                  emptyMessage={EMPTY_MESSAGES[activeTab](filteredCases.isFiltered)}
+                />
+              </motion.div>
+            </AnimatePresence>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* Modal: Novo Caso */}
