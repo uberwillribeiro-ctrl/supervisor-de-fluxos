@@ -24,6 +24,7 @@ import { CaseStatus } from '@/types/case';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import Onboarding from '@/pages/Onboarding';
+import Cases from '@/pages/Cases';
 
 // ─── Usuário fake para o AppShell ─────────────────────────────────────────────
 
@@ -227,12 +228,7 @@ function PageContent({ page }: { page: PageId }) {
     case 'dashboard':
       return <ComponentsShowcase />;
     case 'cases':
-      return (
-        <PlaceholderPage
-          title="Gestão de Casos"
-          description="Disponível no Milestone 4 — feat/cases-ui"
-        />
-      );
+      return <Cases />;
     case 'procedures':
       return (
         <PlaceholderPage
