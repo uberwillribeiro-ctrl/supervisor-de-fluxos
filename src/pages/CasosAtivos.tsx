@@ -5,8 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
-import { MOCK_CASES } from '@/lib/mockData';
-import { CaseStatus } from '@/types/case';
+import { useCases } from '@/hooks/useCases';
 import { normalizeSearch } from '@/utils/normalizeSearch';
 import { formatDate } from '@/utils/formatDate';
 
@@ -69,9 +68,6 @@ const MESES = [
   'Dezembro',
 ];
 
-// ─── Dados ───────────────────────────────────────────────────────────────────
-
-const CASOS_ATIVOS = MOCK_CASES.filter((c) => c.status === CaseStatus.ACTIVE);
 const INATIVIDADE_LIMITE = 30; // dias
 
 function diasSemRelatorio(lastReport?: string): number {
@@ -86,20 +82,55 @@ export default function CasosAtivos() {
   const [busca, setBusca] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<NovoRegistroForm>(FORM_EMPTY);
+  const [saving, setSaving] = useState(false);
 
-  const casosVisiveis = CASOS_ATIVOS.filter((c) =>
-    normalizeSearch(c.name + c.code + c.cpf).includes(normalizeSearch(busca)),
+  const { cases, loading, createCase } = useCases({ status: 'active' });
+
+  const casosVisiveis = cases.filter((c) =>
+    normalizeSearch((c.name ?? '') + (c.code ?? '') + (c.cpf ?? '')).includes(
+      normalizeSearch(busca),
+    ),
   );
 
   const alertaCount = casosVisiveis.filter(
-    (c) => diasSemRelatorio(c.lastReportDate) > INATIVIDADE_LIMITE,
+    (c) => diasSemRelatorio(c.ultimo_relatorio ?? undefined) > INATIVIDADE_LIMITE,
   ).length;
 
   function setField<K extends keyof NovoRegistroForm>(key: K, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleSalvar() {
+  async function handleSalvar() {
+    setSaving(true);
+    await createCase({
+      name: form.nomeCompleto,
+      year: parseInt(form.ano, 10) || null,
+      reference_month: form.mesReferencia || null,
+      profile: form.perfil || null,
+      responsible: form.responsavel || null,
+      age: parseInt(form.idade, 10) || null,
+      sex: form.sexo || null,
+      nationality: form.nacionalidade || null,
+      address: form.endereco || null,
+      neighborhood: form.bairro || null,
+      phone: form.telefone || null,
+      violence_type: form.tipoViolencia || null,
+      code: form.codigo || null,
+      document_date: form.dataDocumento || null,
+      received_date: form.dataRecebido || null,
+      origin: form.origem || null,
+      description: form.descricao || null,
+      status: 'active',
+      cpf: null,
+      birth_date: null,
+      was_new: false,
+      category: null,
+      archived_month: null,
+      archived_year: null,
+      ultimo_relatorio: null,
+      user_id: null,
+    });
+    setSaving(false);
     setModalOpen(false);
     setForm(FORM_EMPTY);
   }
@@ -186,7 +217,13 @@ export default function CasosAtivos() {
             </thead>
 
             <tbody className="divide-y divide-slate-800/60">
-              {casosVisiveis.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={21} className="py-16 text-center text-slate-500 text-sm">
+                    Carregando...
+                  </td>
+                </tr>
+              ) : casosVisiveis.length === 0 ? (
                 <tr>
                   <td colSpan={21} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-3 text-slate-500">
@@ -204,13 +241,8 @@ export default function CasosAtivos() {
                 </tr>
               ) : (
                 casosVisiveis.map((caso, idx) => {
-                  const dias = diasSemRelatorio(caso.lastReportDate);
+                  const dias = diasSemRelatorio(caso.ultimo_relatorio ?? undefined);
                   const inativo = dias > INATIVIDADE_LIMITE;
-                  const mesEntrada = new Date(caso.entryDate).toLocaleString('pt-BR', {
-                    month: 'long',
-                  });
-                  const anoEntrada = new Date(caso.entryDate).getFullYear();
-
                   return (
                     <tr
                       key={caso.id}
@@ -220,16 +252,16 @@ export default function CasosAtivos() {
                       )}
                     >
                       <td className="px-3 py-3 text-slate-500">{idx + 1}</td>
-                      <td className="px-3 py-3 text-slate-400">{anoEntrada}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.year ?? '—'}</td>
                       <td className="px-3 py-3">
-                        {caso.lastReportDate ? (
+                        {caso.ultimo_relatorio ? (
                           <span
                             className={cn(
                               'font-medium',
                               inativo ? 'text-amber-400' : 'text-slate-300',
                             )}
                           >
-                            {formatDate(caso.lastReportDate)}
+                            {formatDate(caso.ultimo_relatorio)}
                             {inativo && (
                               <span className="ml-1.5 text-[10px] bg-amber-500/15 text-amber-400 px-1.5 py-0.5 rounded-md">
                                 {dias}d
@@ -240,35 +272,38 @@ export default function CasosAtivos() {
                           <span className="text-slate-600">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-3 capitalize text-slate-400">{mesEntrada}</td>
+                      <td className="px-3 py-3 capitalize text-slate-400">
+                        {caso.reference_month ?? '—'}
+                      </td>
                       <td className="px-3 py-3 font-medium text-slate-200">{caso.name}</td>
                       <td className="px-3 py-3">
                         <span
                           className={cn(
                             'text-xs font-semibold px-2 py-0.5 rounded-md',
-                            caso.service === 'PAEFI'
+                            caso.profile === 'PAEFI'
                               ? 'bg-indigo-500/10 text-indigo-300'
                               : 'bg-emerald-500/10 text-emerald-300',
                           )}
                         >
-                          {caso.service}
+                          {caso.profile ?? '—'}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-slate-400">{caso.responsibleName}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.responsible ?? '—'}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.age ?? '—'}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.sex ?? '—'}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.nationality ?? '—'}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.address ?? '—'}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.neighborhood ?? '—'}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.phone ?? '—'}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.violence_type ?? '—'}</td>
+                      <td className="px-3 py-3 font-mono text-slate-500">{caso.code ?? '—'}</td>
                       <td className="px-3 py-3 text-slate-400">
-                        {new Date().getFullYear() - new Date(caso.birthDate).getFullYear()}
+                        {caso.document_date ? formatDate(caso.document_date) : '—'}
                       </td>
-                      <td className="px-3 py-3 text-slate-400">—</td>
-                      <td className="px-3 py-3 text-slate-400">—</td>
-                      <td className="px-3 py-3 text-slate-400">{caso.address}</td>
-                      <td className="px-3 py-3 text-slate-400">{caso.neighborhood}</td>
-                      <td className="px-3 py-3 text-slate-400">—</td>
                       <td className="px-3 py-3 text-slate-400">
-                        {caso.entryReason.replace(/_/g, ' ')}
+                        {caso.received_date ? formatDate(caso.received_date) : '—'}
                       </td>
-                      <td className="px-3 py-3 font-mono text-slate-500">{caso.code}</td>
-                      <td className="px-3 py-3 text-slate-400">{formatDate(caso.entryDate)}</td>
-                      <td className="px-3 py-3 text-slate-400">—</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.origin ?? '—'}</td>
                       <td className="px-3 py-3 text-slate-400">—</td>
                       <td className="px-3 py-3">
                         <button className="text-xs text-indigo-400 hover:text-indigo-300 underline transition-colors">
@@ -467,8 +502,8 @@ export default function CasosAtivos() {
             >
               Cancelar
             </Button>
-            <Button variant="primary" onClick={handleSalvar}>
-              Salvar Registro Completo
+            <Button variant="primary" onClick={handleSalvar} disabled={saving}>
+              {saving ? 'Salvando...' : 'Salvar Registro Completo'}
             </Button>
           </div>
         </div>

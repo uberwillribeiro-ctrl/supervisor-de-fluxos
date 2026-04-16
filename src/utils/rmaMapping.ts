@@ -1,4 +1,5 @@
 import { type ProcedureRecord } from '@/types/procedure';
+import { type DbProcedure } from '@/lib/supabase';
 
 // ─── Enum das colunas RMA oficiais ────────────────────────────────────────────
 
@@ -68,6 +69,50 @@ export function aggregateRMA(procedures: ProcedureRecord[]): RMACounters {
 
   return procedures.reduce((acc, proc) => {
     const counters = extractRMACounters(proc);
+    for (const col of Object.values(RMAColumn)) {
+      acc[col] = (acc[col] ?? 0) + (counters[col] ?? 0);
+    }
+    return acc;
+  }, zero);
+}
+
+// ─── Versão para DbProcedure (snake_case do Supabase) ────────────────────────
+
+export function extractRMACountersFromDb(proc: DbProcedure): RMACounters {
+  return {
+    [RMAColumn.CONTATOS_EXITO]: proc.contatos_com_exito ?? 0,
+    [RMAColumn.TELEFONICAS_SEM_EXITO]: proc.telefonicos_sem_exito ?? 0,
+    [RMAColumn.ATEND_INDIVIDUALIZADO]: proc.atendimento_individualizado ?? 0,
+    [RMAColumn.ATEND_GRUPO]: proc.atendimento_em_grupo ?? 0,
+    [RMAColumn.ENCAMINHAMENTO_CRAS]: proc.encaminhamento_cras ?? 0,
+    [RMAColumn.VISITAS_DOMICILIAR]: proc.visita_domiciliar ?? 0,
+    [RMAColumn.VISITAS_INSTITUCIONAL]: proc.visita_institucional ?? 0,
+    [RMAColumn.VISITAS_SEM_EXITO]: proc.visita_sem_exito ?? 0,
+    [RMAColumn.CASOS_DESLIGADOS]: proc.casos_desligados ?? 0,
+    [RMAColumn.OUTROS_ENCAMINHAMENTOS]: proc.outros_encaminhamentos ?? 0,
+    [RMAColumn.REUNIAO_FAMILIAR]: proc.reuniao_familiar ?? 0,
+    [RMAColumn.PALESTRAS]: proc.palestras ?? 0,
+    [RMAColumn.PRONTUARIO_SUAS]: proc.prontuario_suas ?? 0,
+    [RMAColumn.RELATORIOS]: proc.relatorios ?? 0,
+    [RMAColumn.PIAS]: proc.pias ?? 0,
+    [RMAColumn.PARECER]: proc.parecer ?? 0,
+    [RMAColumn.ATENDIDOS_0_10]: proc.atendidos_0_10_anos ?? 0,
+    [RMAColumn.ATENDIMENTOS_0_10]: proc.atendimentos_0_10_anos ?? 0,
+    [RMAColumn.ATENDIDOS_11_17]: proc.atendidos_11_17_anos ?? 0,
+    [RMAColumn.ATENDIMENTOS_11_17]: proc.atendimentos_11_17_anos ?? 0,
+    [RMAColumn.MULHERES_VIOLENCIA]: proc.mulheres_atendidas_violencia ?? 0,
+    [RMAColumn.OUTROS]: 0,
+  };
+}
+
+export function aggregateRMAFromDb(procedures: DbProcedure[]): RMACounters {
+  const zero = Object.values(RMAColumn).reduce(
+    (acc, col) => ({ ...acc, [col]: 0 }),
+    {} as RMACounters,
+  );
+
+  return procedures.reduce((acc, proc) => {
+    const counters = extractRMACountersFromDb(proc);
     for (const col of Object.values(RMAColumn)) {
       acc[col] = (acc[col] ?? 0) + (counters[col] ?? 0);
     }

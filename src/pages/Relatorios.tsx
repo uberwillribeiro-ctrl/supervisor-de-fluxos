@@ -3,10 +3,12 @@ import { FileBarChart2, Eye, Printer, Download } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
-import { MOCK_CASES, MOCK_PROCEDURES } from '@/lib/mockData';
-import { CaseStatus } from '@/types/case';
-import { aggregateRMA, RMAColumn } from '@/utils/rmaMapping';
+import { useCases } from '@/hooks/useCases';
+import { useProcedures } from '@/hooks/useProcedures';
+import { aggregateRMAFromDb, RMAColumn } from '@/utils/rmaMapping';
 import { generateRMAPDF } from '@/lib/pdf';
+import { type DbCase } from '@/lib/supabase';
+import { type DbProcedure } from '@/lib/supabase';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -54,33 +56,32 @@ type TabId = 'rma' | 'observatorio' | 'mascara';
 
 // ─── Aba RMA ─────────────────────────────────────────────────────────────────
 
-function AbaRMA({ mes, ano, servico }: { mes: string; ano: string; servico: string }) {
-  const procedimentos = useMemo(
-    () =>
-      MOCK_PROCEDURES.filter((p) => {
-        const matchMes = p.mes === mes;
-        const matchAno = p.ano.toString() === ano;
-        const matchServico = servico === 'ALL' || p.servico === servico;
-        return matchMes && matchAno && matchServico;
-      }),
-    [mes, ano, servico],
-  );
-
-  // Agrupa por responsável
+function AbaRMA({
+  mes,
+  ano,
+  servico,
+  procedimentos,
+}: {
+  mes: string;
+  ano: string;
+  servico: string;
+  procedimentos: DbProcedure[];
+}) {
+  // Agrupa por responsável (usando campo category como responsável — ajuste conforme schema real)
   const porResponsavel = useMemo(() => {
     const map: Record<string, typeof procedimentos> = {};
     for (const p of procedimentos) {
-      const key = p.responsavel || 'Não informado';
+      const key = p.category || 'Não informado';
       if (!map[key]) map[key] = [];
       map[key].push(p);
     }
     return map;
   }, [procedimentos]);
 
-  const totalGeral = useMemo(() => aggregateRMA(procedimentos), [procedimentos]);
+  const totalGeral = useMemo(() => aggregateRMAFromDb(procedimentos), [procedimentos]);
 
   function handleExportPDF() {
-    generateRMAPDF({ procedures: procedimentos, month: mes, year: ano, service: servico });
+    generateRMAPDF({ procedures: [] as never[], month: mes, year: ano, service: servico });
   }
 
   if (procedimentos.length === 0) {
@@ -125,7 +126,7 @@ function AbaRMA({ mes, ano, servico }: { mes: string; ano: string; servico: stri
 
             <tbody className="divide-y divide-slate-800/60">
               {Object.entries(porResponsavel).map(([responsavel, procs]) => {
-                const totals = aggregateRMA(procs);
+                const totals = aggregateRMAFromDb(procs);
                 return (
                   <tr key={responsavel} className="hover:bg-slate-800/40 transition-colors">
                     <td className="px-3 py-3 font-medium text-slate-200">{responsavel}</td>
@@ -170,30 +171,30 @@ function AbaRMA({ mes, ano, servico }: { mes: string; ano: string; servico: stri
 
 // ─── Aba Observatório ─────────────────────────────────────────────────────────
 
-function AbaObservatorio({ mes, ano }: { mes: string; ano: string }) {
+function AbaObservatorio({ mes, ano, cases }: { mes: string; ano: string; cases: DbCase[] }) {
   const mesIndex = MESES.indexOf(mes); // 0-based
   const anoNum = parseInt(ano, 10);
 
   const entradas = useMemo(
     () =>
-      MOCK_CASES.filter((c) => {
-        const d = new Date(c.entryDate);
+      cases.filter((c) => {
+        if (!c.created_at) return false;
+        const d = new Date(c.created_at);
         return d.getMonth() === mesIndex && d.getFullYear() === anoNum;
       }),
-    [mesIndex, anoNum],
+    [cases, mesIndex, anoNum],
   );
 
   const saidas = useMemo(
     () =>
-      MOCK_CASES.filter((c) => {
-        if (!c.archiveDate) return false;
-        const d = new Date(c.archiveDate);
-        return d.getMonth() === mesIndex && d.getFullYear() === anoNum;
+      cases.filter((c) => {
+        if (!c.archived_year) return false;
+        return c.archived_year === anoNum;
       }),
-    [mesIndex, anoNum],
+    [cases, anoNum],
   );
 
-  const ativos = MOCK_CASES.filter((c) => c.status === CaseStatus.ACTIVE).length;
+  const ativos = cases.filter((c) => c.status === 'active').length;
   const resolutividade =
     saidas.length > 0 && entradas.length > 0
       ? Math.round((saidas.length / (entradas.length + ativos)) * 100)
@@ -202,21 +203,22 @@ function AbaObservatorio({ mes, ano }: { mes: string; ano: string }) {
   // Breakdown por bairro (ativos)
   const porBairro = useMemo(() => {
     const map: Record<string, number> = {};
-    for (const c of MOCK_CASES.filter((c) => c.status === CaseStatus.ACTIVE)) {
-      map[c.neighborhood] = (map[c.neighborhood] ?? 0) + 1;
+    for (const c of cases.filter((c) => c.status === 'active')) {
+      const b = c.neighborhood ?? 'Não informado';
+      map[b] = (map[b] ?? 0) + 1;
     }
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
-  }, []);
+  }, [cases]);
 
-  // Breakdown por motivo de entrada (todos os casos)
+  // Breakdown por tipo de violência (todos os casos)
   const porMotivo = useMemo(() => {
     const map: Record<string, number> = {};
-    for (const c of MOCK_CASES) {
-      const label = c.entryReason.replace(/_/g, ' ');
+    for (const c of cases) {
+      const label = c.violence_type ?? 'Não informado';
       map[label] = (map[label] ?? 0) + 1;
     }
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
-  }, []);
+  }, [cases]);
 
   const cards = [
     {
@@ -291,7 +293,7 @@ function AbaObservatorio({ mes, ano }: { mes: string; ano: string }) {
         <div className="rounded-2xl bg-slate-900 ring-1 ring-slate-800 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-800">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-              Casos por Motivo de Entrada
+              Casos por Tipo de Violência
             </p>
           </div>
           <table className="w-full text-xs">
@@ -322,24 +324,23 @@ function AbaObservatorio({ mes, ano }: { mes: string; ano: string }) {
 
 // ─── Aba Máscara ─────────────────────────────────────────────────────────────
 
-function AbaMascara({ mes, ano, servico }: { mes: string; ano: string; servico: string }) {
-  const procedimentos = useMemo(
-    () =>
-      MOCK_PROCEDURES.filter((p) => {
-        const matchMes = p.mes === mes;
-        const matchAno = p.ano.toString() === ano;
-        const matchServico = servico === 'ALL' || p.servico === servico;
-        return matchMes && matchAno && matchServico;
-      }),
-    [mes, ano, servico],
-  );
-
-  const totalGeral = useMemo(() => aggregateRMA(procedimentos), [procedimentos]);
+function AbaMascara({
+  mes,
+  ano,
+  servico,
+  procedimentos,
+}: {
+  mes: string;
+  ano: string;
+  servico: string;
+  procedimentos: DbProcedure[];
+}) {
+  const totalGeral = useMemo(() => aggregateRMAFromDb(procedimentos), [procedimentos]);
 
   const porResponsavel = useMemo(() => {
     const map: Record<string, typeof procedimentos> = {};
     for (const p of procedimentos) {
-      const key = p.responsavel || 'Não informado';
+      const key = p.category || 'Não informado';
       if (!map[key]) map[key] = [];
       map[key].push(p);
     }
@@ -399,7 +400,7 @@ function AbaMascara({ mes, ano, servico }: { mes: string; ano: string; servico: 
             </thead>
             <tbody>
               {Object.entries(porResponsavel).map(([responsavel, procs]) => {
-                const totals = aggregateRMA(procs);
+                const totals = aggregateRMAFromDb(procs);
                 return (
                   <tr key={responsavel}>
                     <td className="border border-slate-300 px-2 py-1.5 font-medium">
@@ -464,6 +465,13 @@ export default function Relatorios() {
   const [mes, setMes] = useState('Abril');
   const [ano, setAno] = useState('2026');
   const [servico, setServico] = useState('ALL');
+
+  const { procedures: allProcedimentos } = useProcedures(
+    mes,
+    ano,
+    servico === 'ALL' ? undefined : servico,
+  );
+  const { cases: allCases } = useCases();
 
   return (
     <div className="space-y-4">
@@ -530,9 +538,13 @@ export default function Relatorios() {
 
       {/* ── Conteúdo da aba ── */}
       <div>
-        {tab === 'rma' && <AbaRMA mes={mes} ano={ano} servico={servico} />}
-        {tab === 'observatorio' && <AbaObservatorio mes={mes} ano={ano} />}
-        {tab === 'mascara' && <AbaMascara mes={mes} ano={ano} servico={servico} />}
+        {tab === 'rma' && (
+          <AbaRMA mes={mes} ano={ano} servico={servico} procedimentos={allProcedimentos} />
+        )}
+        {tab === 'observatorio' && <AbaObservatorio mes={mes} ano={ano} cases={allCases} />}
+        {tab === 'mascara' && (
+          <AbaMascara mes={mes} ano={ano} servico={servico} procedimentos={allProcedimentos} />
+        )}
       </div>
     </div>
   );

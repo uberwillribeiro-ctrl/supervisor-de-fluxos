@@ -5,8 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
-import { MOCK_CASES } from '@/lib/mockData';
-import { CaseStatus } from '@/types/case';
+import { useCases } from '@/hooks/useCases';
 import { normalizeSearch } from '@/utils/normalizeSearch';
 import { formatDate } from '@/utils/formatDate';
 
@@ -69,26 +68,57 @@ const MESES = [
   'Dezembro',
 ];
 
-// ─── Dados da tabela ─────────────────────────────────────────────────────────
-
-const CASOS_NOVOS = MOCK_CASES.filter((c) => c.status === CaseStatus.NEW);
-
 // ─── Componente ──────────────────────────────────────────────────────────────
 
 export default function CasosNovos() {
   const [busca, setBusca] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<NovoRegistroForm>(FORM_EMPTY);
+  const [saving, setSaving] = useState(false);
 
-  const casosVisiveis = CASOS_NOVOS.filter((c) =>
-    normalizeSearch(c.name + c.code + c.cpf).includes(normalizeSearch(busca)),
+  const { cases, loading, createCase } = useCases({ status: 'new' });
+
+  const casosVisiveis = cases.filter((c) =>
+    normalizeSearch((c.name ?? '') + (c.code ?? '') + (c.cpf ?? '')).includes(
+      normalizeSearch(busca),
+    ),
   );
 
   function setField<K extends keyof NovoRegistroForm>(key: K, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleSalvar() {
+  async function handleSalvar() {
+    setSaving(true);
+    await createCase({
+      name: form.nomeCompleto,
+      year: parseInt(form.ano, 10) || null,
+      reference_month: form.mesReferencia || null,
+      profile: form.perfil || null,
+      responsible: form.responsavel || null,
+      age: parseInt(form.idade, 10) || null,
+      sex: form.sexo || null,
+      nationality: form.nacionalidade || null,
+      address: form.endereco || null,
+      neighborhood: form.bairro || null,
+      phone: form.telefone || null,
+      violence_type: form.tipoViolencia || null,
+      code: form.codigo || null,
+      document_date: form.dataDocumento || null,
+      received_date: form.dataRecebido || null,
+      origin: form.origem || null,
+      description: form.descricao || null,
+      status: 'new',
+      cpf: null,
+      birth_date: null,
+      was_new: true,
+      category: null,
+      archived_month: null,
+      archived_year: null,
+      ultimo_relatorio: null,
+      user_id: null,
+    });
+    setSaving(false);
     setModalOpen(false);
     setForm(FORM_EMPTY);
   }
@@ -166,7 +196,13 @@ export default function CasosNovos() {
             </thead>
 
             <tbody className="divide-y divide-slate-800/60">
-              {casosVisiveis.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={21} className="py-16 text-center text-slate-500 text-sm">
+                    Carregando...
+                  </td>
+                </tr>
+              ) : casosVisiveis.length === 0 ? (
                 <tr>
                   <td colSpan={21} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-3 text-slate-500">
@@ -183,80 +219,77 @@ export default function CasosNovos() {
                   </td>
                 </tr>
               ) : (
-                casosVisiveis.map((caso, idx) => {
-                  const mesEntrada = new Date(caso.entryDate).toLocaleString('pt-BR', {
-                    month: 'long',
-                  });
-                  const anoEntrada = new Date(caso.entryDate).getFullYear();
-                  return (
-                    <tr key={caso.id} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="px-3 py-3 text-slate-500">{idx + 1}</td>
-                      <td className="px-3 py-3">
-                        <button
-                          className="size-6 rounded-md bg-slate-700 hover:bg-indigo-600 transition-colors flex items-center justify-center"
-                          title="Ativar"
+                casosVisiveis.map((caso, idx) => (
+                  <tr key={caso.id} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="px-3 py-3 text-slate-500">{idx + 1}</td>
+                    <td className="px-3 py-3">
+                      <button
+                        className="size-6 rounded-md bg-slate-700 hover:bg-indigo-600 transition-colors flex items-center justify-center"
+                        title="Ativar"
+                      >
+                        <span className="size-2 rounded-full bg-slate-400" />
+                      </button>
+                    </td>
+                    <td className="px-3 py-3 text-slate-400">{caso.year ?? '—'}</td>
+                    <td className="px-3 py-3 capitalize text-slate-400">
+                      {caso.reference_month ?? '—'}
+                    </td>
+                    <td className="px-3 py-3 font-medium text-slate-200">{caso.name}</td>
+                    <td className="px-3 py-3">
+                      <span
+                        className={cn(
+                          'text-xs font-semibold px-2 py-0.5 rounded-md',
+                          caso.profile === 'PAEFI'
+                            ? 'bg-indigo-500/10 text-indigo-300'
+                            : 'bg-emerald-500/10 text-emerald-300',
+                        )}
+                      >
+                        {caso.profile ?? '—'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-slate-400">{caso.responsible ?? '—'}</td>
+                    <td className="px-3 py-3 text-slate-400">{caso.age ?? '—'}</td>
+                    <td className="px-3 py-3 text-slate-400">{caso.sex ?? '—'}</td>
+                    <td className="px-3 py-3 text-slate-400">{caso.address ?? '—'}</td>
+                    <td className="px-3 py-3 text-slate-400">{caso.neighborhood ?? '—'}</td>
+                    <td className="px-3 py-3 text-slate-400">{caso.phone ?? '—'}</td>
+                    <td className="px-3 py-3 text-slate-400">{caso.violence_type ?? '—'}</td>
+                    <td className="px-3 py-3 font-mono text-slate-500">{caso.code ?? '—'}</td>
+                    <td className="px-3 py-3 text-slate-400">
+                      {caso.document_date ? formatDate(caso.document_date) : '—'}
+                    </td>
+                    <td className="px-3 py-3 text-slate-400">
+                      {caso.received_date ? formatDate(caso.received_date) : '—'}
+                    </td>
+                    <td className="px-3 py-3 text-slate-400">{caso.origin ?? '—'}</td>
+                    <td className="px-3 py-3 text-slate-400">—</td>
+                    <td className="px-3 py-3">
+                      <button className="text-xs text-indigo-400 hover:text-indigo-300 underline transition-colors">
+                        Ver
+                      </button>
+                    </td>
+                    <td className="px-3 py-3">
+                      <button
+                        className="flex items-center justify-center size-7 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-400 hover:text-white transition-colors mx-auto"
+                        title="Editar"
+                      >
+                        <svg
+                          className="size-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
                         >
-                          <span className="size-2 rounded-full bg-slate-400" />
-                        </button>
-                      </td>
-                      <td className="px-3 py-3 text-slate-400">{anoEntrada}</td>
-                      <td className="px-3 py-3 capitalize text-slate-400">{mesEntrada}</td>
-                      <td className="px-3 py-3 font-medium text-slate-200">{caso.name}</td>
-                      <td className="px-3 py-3">
-                        <span
-                          className={cn(
-                            'text-xs font-semibold px-2 py-0.5 rounded-md',
-                            caso.service === 'PAEFI'
-                              ? 'bg-indigo-500/10 text-indigo-300'
-                              : 'bg-emerald-500/10 text-emerald-300',
-                          )}
-                        >
-                          {caso.service}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-slate-400">{caso.responsibleName}</td>
-                      <td className="px-3 py-3 text-slate-400">
-                        {new Date().getFullYear() - new Date(caso.birthDate).getFullYear()}
-                      </td>
-                      <td className="px-3 py-3 text-slate-400">—</td>
-                      <td className="px-3 py-3 text-slate-400">{caso.address}</td>
-                      <td className="px-3 py-3 text-slate-400">{caso.neighborhood}</td>
-                      <td className="px-3 py-3 text-slate-400">—</td>
-                      <td className="px-3 py-3 text-slate-400">
-                        {caso.entryReason.replace(/_/g, ' ')}
-                      </td>
-                      <td className="px-3 py-3 font-mono text-slate-500">{caso.code}</td>
-                      <td className="px-3 py-3 text-slate-400">{formatDate(caso.entryDate)}</td>
-                      <td className="px-3 py-3 text-slate-400">—</td>
-                      <td className="px-3 py-3 text-slate-400">—</td>
-                      <td className="px-3 py-3">
-                        <button className="text-xs text-indigo-400 hover:text-indigo-300 underline transition-colors">
-                          Ver
-                        </button>
-                      </td>
-                      <td className="px-3 py-3">
-                        <button
-                          className="flex items-center justify-center size-7 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-400 hover:text-white transition-colors mx-auto"
-                          title="Editar"
-                        >
-                          <svg
-                            className="size-3.5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828A2 2 0 019 16H7v-2a2 2 0 01.586-1.414z"
-                            />
-                          </svg>
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828A2 2 0 019 16H7v-2a2 2 0 01.586-1.414z"
+                          />
+                        </svg>
+                      </button>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -429,8 +462,8 @@ export default function CasosNovos() {
             >
               Cancelar
             </Button>
-            <Button variant="primary" onClick={handleSalvar}>
-              Salvar Registro Completo
+            <Button variant="primary" onClick={handleSalvar} disabled={saving}>
+              {saving ? 'Salvando...' : 'Salvar Registro Completo'}
             </Button>
           </div>
         </div>
