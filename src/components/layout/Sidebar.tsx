@@ -2,10 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   LayoutDashboard,
+  UserPlus,
   Users,
   ClipboardList,
-  BarChart3,
-  Settings,
+  Archive,
   ChevronDown,
   Check,
   Building2,
@@ -17,7 +17,7 @@ import { type UserProfile, UserRole } from '@/types/user';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
-export type PageId = 'dashboard' | 'cases' | 'procedures' | 'reports' | 'admin';
+export type PageId = 'dashboard' | 'casos-novos' | 'casos-ativos' | 'procedimentos' | 'arquivados';
 
 interface NavItem {
   id: PageId;
@@ -44,10 +44,10 @@ interface SidebarProps {
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'cases', label: 'Casos', icon: Users },
-  { id: 'procedures', label: 'Procedimentos', icon: ClipboardList },
-  { id: 'reports', label: 'Relatórios', icon: BarChart3 },
-  { id: 'admin', label: 'Administração', icon: Settings, roles: [UserRole.ADMIN] },
+  { id: 'casos-novos', label: 'Casos Novos', icon: UserPlus },
+  { id: 'casos-ativos', label: 'Casos Ativos', icon: Users },
+  { id: 'procedimentos', label: 'Procedimentos', icon: ClipboardList },
+  { id: 'arquivados', label: 'Arquivados', icon: Archive },
 ];
 
 const FAKE_WORKSPACES: Workspace[] = [
