@@ -6,7 +6,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { MOCK_CASES } from '@/lib/mockData';
-import { CaseStatus, ARCHIVE_REASON_OPTIONS } from '@/types/case';
+import { CaseStatus } from '@/types/case';
 import { normalizeSearch } from '@/utils/normalizeSearch';
 import { formatDate } from '@/utils/formatDate';
 
@@ -116,15 +116,18 @@ export default function Arquivados() {
                   'Perfil',
                   'Ano',
                   'Nome',
-                  'Data Arquivamento',
+                  'Data do Arquivamento',
                   'Responsável',
                   'Idade',
                   'Sexo',
+                  'Nacionalidade',
+                  'Endereço',
                   'Bairro',
                   'Telefone',
                   'Tipo de Violência',
                   'Código',
                   'Motivo do Desligamento',
+                  'Editar',
                 ].map((col) => (
                   <th
                     key={col}
@@ -139,7 +142,7 @@ export default function Arquivados() {
             <tbody className="divide-y divide-slate-800/60">
               {casosVisiveis.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-16 text-center">
+                  <td colSpan={16} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-3 text-slate-500">
                       <Archive className="size-8 text-slate-700" strokeWidth={1.5} />
                       <p className="text-sm">Nenhum caso encontrado nesta categoria.</p>
@@ -149,10 +152,7 @@ export default function Arquivados() {
               ) : (
                 casosVisiveis.map((caso, idx) => {
                   const anoEntrada = new Date(caso.entryDate).getFullYear();
-                  const motivoLabel =
-                    ARCHIVE_REASON_OPTIONS.find((o) => o.value === caso.archiveReason)?.label ??
-                    caso.archiveReason ??
-                    '—';
+                  const motivoLabel = caso.archiveReason ?? '—';
 
                   return (
                     <tr
@@ -182,6 +182,7 @@ export default function Arquivados() {
                         {new Date().getFullYear() - new Date(caso.birthDate).getFullYear()}
                       </td>
                       <td className="px-3 py-3 text-slate-400">—</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.address}</td>
                       <td className="px-3 py-3 text-slate-400">{caso.neighborhood}</td>
                       <td className="px-3 py-3 text-slate-400">—</td>
                       <td className="px-3 py-3 text-slate-400">
@@ -193,6 +194,26 @@ export default function Arquivados() {
                         title={motivoLabel}
                       >
                         {motivoLabel}
+                      </td>
+                      <td className="px-3 py-3">
+                        <button
+                          className="flex items-center justify-center size-7 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-400 hover:text-white transition-colors mx-auto"
+                          title="Editar"
+                        >
+                          <svg
+                            className="size-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828A2 2 0 019 16H7v-2a2 2 0 01.586-1.414z"
+                            />
+                          </svg>
+                        </button>
                       </td>
                     </tr>
                   );
@@ -325,10 +346,8 @@ export default function Arquivados() {
               value={form.dataArquivamento}
               onChange={(e) => setField('dataArquivamento', e.target.value)}
             />
-            <Select
+            <Input
               label="Motivo do Desligamento"
-              placeholder="Selecione..."
-              options={ARCHIVE_REASON_OPTIONS}
               value={form.motivoDesligamento}
               onChange={(e) => setField('motivoDesligamento', e.target.value)}
             />

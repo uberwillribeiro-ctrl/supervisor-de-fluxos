@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
-import { Badge } from '@/components/ui/Badge';
 import { MOCK_CASES } from '@/lib/mockData';
 import { CaseStatus } from '@/types/case';
 import { normalizeSearch } from '@/utils/normalizeSearch';
@@ -137,19 +136,24 @@ export default function CasosNovos() {
                   '#',
                   'Ativar',
                   'Ano',
-                  'Mês Ref.',
+                  'Mês de Referência',
                   'Nome',
                   'Perfil',
                   'Responsável',
                   'Idade',
                   'Sexo',
+                  'Nacionalidade',
+                  'Endereço',
                   'Bairro',
                   'Telefone',
                   'Tipo de Violência',
                   'Código',
-                  'Data Doc.',
+                  'Data do Documento',
+                  'Data que Recebi',
                   'Origem',
-                  'Ações',
+                  'Arquivar',
+                  'Procedimentos',
+                  'Editar',
                 ].map((col) => (
                   <th
                     key={col}
@@ -164,7 +168,7 @@ export default function CasosNovos() {
             <tbody className="divide-y divide-slate-800/60">
               {casosVisiveis.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="py-16 text-center">
+                  <td colSpan={21} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-3 text-slate-500">
                       <UserPlus className="size-8 text-slate-700" strokeWidth={1.5} />
                       <p className="text-sm">Nenhum caso encontrado nesta categoria.</p>
@@ -215,6 +219,7 @@ export default function CasosNovos() {
                         {new Date().getFullYear() - new Date(caso.birthDate).getFullYear()}
                       </td>
                       <td className="px-3 py-3 text-slate-400">—</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.address}</td>
                       <td className="px-3 py-3 text-slate-400">{caso.neighborhood}</td>
                       <td className="px-3 py-3 text-slate-400">—</td>
                       <td className="px-3 py-3 text-slate-400">
@@ -223,10 +228,31 @@ export default function CasosNovos() {
                       <td className="px-3 py-3 font-mono text-slate-500">{caso.code}</td>
                       <td className="px-3 py-3 text-slate-400">{formatDate(caso.entryDate)}</td>
                       <td className="px-3 py-3 text-slate-400">—</td>
+                      <td className="px-3 py-3 text-slate-400">—</td>
                       <td className="px-3 py-3">
-                        <div className="flex items-center gap-1">
-                          <Badge variant="novo">Novo</Badge>
-                        </div>
+                        <button className="text-xs text-indigo-400 hover:text-indigo-300 underline transition-colors">
+                          Ver
+                        </button>
+                      </td>
+                      <td className="px-3 py-3">
+                        <button
+                          className="flex items-center justify-center size-7 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-400 hover:text-white transition-colors mx-auto"
+                          title="Editar"
+                        >
+                          <svg
+                            className="size-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828A2 2 0 019 16H7v-2a2 2 0 01.586-1.414z"
+                            />
+                          </svg>
+                        </button>
                       </td>
                     </tr>
                   );
