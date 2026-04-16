@@ -18,6 +18,7 @@ import CasosNovos from '@/pages/CasosNovos';
 import CasosAtivos from '@/pages/CasosAtivos';
 import Procedimentos from '@/pages/Procedimentos';
 import Arquivados from '@/pages/Arquivados';
+import Relatorios from '@/pages/Relatorios';
 
 // ─── Usuário fake para o AppShell ─────────────────────────────────────────────
 
@@ -44,6 +45,8 @@ function PageContent({ page }: { page: PageId }) {
       return <Procedimentos />;
     case 'arquivados':
       return <Arquivados />;
+    case 'relatorios':
+      return <Relatorios />;
   }
 }
 

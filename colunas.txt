@@ -1,0 +1,1 @@
+#	Perfil	Ano	Nome	Data do Arquivamento	Responsável	Idade	Sexo	Nacionalidade	Endereço	Bairro	Telefone	Tipo de Violência	Código	Motivo do Desligamento	Editar

@@ -6,6 +6,7 @@ import {
   Users,
   ClipboardList,
   Archive,
+  FileBarChart2,
   ChevronDown,
   Check,
   Building2,
@@ -17,7 +18,13 @@ import { type UserProfile, UserRole } from '@/types/user';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
-export type PageId = 'dashboard' | 'casos-novos' | 'casos-ativos' | 'procedimentos' | 'arquivados';
+export type PageId =
+  | 'dashboard'
+  | 'casos-novos'
+  | 'casos-ativos'
+  | 'procedimentos'
+  | 'arquivados'
+  | 'relatorios';
 
 interface NavItem {
   id: PageId;
@@ -48,6 +55,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'casos-ativos', label: 'Casos Ativos', icon: Users },
   { id: 'procedimentos', label: 'Procedimentos', icon: ClipboardList },
   { id: 'arquivados', label: 'Arquivados', icon: Archive },
+  { id: 'relatorios', label: 'Relatórios', icon: FileBarChart2 },
 ];
 
 const FAKE_WORKSPACES: Workspace[] = [
