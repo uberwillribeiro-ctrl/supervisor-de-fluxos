@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   ResponsiveContainer,
   FunnelChart,
@@ -25,6 +26,8 @@ import {
 import { cn } from '@/utils/cn';
 import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/hooks/useAuth';
+import { useCases } from '@/hooks/useCases';
+import { useProcedures } from '@/hooks/useProcedures';
 import { formatDate } from '@/utils/formatDate';
 
 // ─── Tipos internos ──────────────────────────────────────────────────────────
@@ -32,7 +35,7 @@ import { formatDate } from '@/utils/formatDate';
 interface MetricCard {
   label: string;
   value: number;
-  delta: number; // % vs mês anterior (positivo = alta, negativo = queda)
+  delta: number;
   icon: React.ElementType;
   color: 'indigo' | 'emerald' | 'amber' | 'red';
 }
@@ -44,152 +47,25 @@ interface PipelineStage {
   fill: string;
 }
 
-interface DeadlineRow {
-  id: string;
-  code: string;
-  name: string;
-  responsible: string;
-  lastReport: string;
-  daysIdle: number;
-  service: 'PAEFI' | 'SEV';
-  urgency: 'critical' | 'warning' | 'ok';
-}
-
 interface MonthlyData {
   month: string;
   novos: number;
   arquivados: number;
 }
 
-// ─── Mock data ───────────────────────────────────────────────────────────────
-
-const METRIC_CARDS: MetricCard[] = [
-  { label: 'Casos Novos', value: 7, delta: 16.7, icon: Users, color: 'indigo' },
-  { label: 'Casos Ativos', value: 9, delta: 12.5, icon: FolderOpen, color: 'emerald' },
-  { label: 'Procedimentos Realizados', value: 38, delta: -5.0, icon: UserCheck, color: 'amber' },
-  { label: 'Arquivados', value: 4, delta: 33.3, icon: Archive, color: 'red' },
-];
-
-const PIPELINE_STAGES: PipelineStage[] = [
-  { name: 'Entrada / Triagem', shortName: 'Triagem', value: 7, fill: '#6366f1' },
-  { name: 'Em Atendimento Ativo', shortName: 'Ativos', value: 9, fill: '#818cf8' },
-  { name: 'Monitoramento', shortName: 'Monitor.', value: 6, fill: '#a5b4fc' },
-  { name: 'Encerramento', shortName: 'Encerr.', value: 4, fill: '#c7d2fe' },
-];
-
-const DEADLINE_ROWS: DeadlineRow[] = [
-  {
-    id: 'case-14',
-    code: 'CAS-2025-0112',
-    name: 'Francisco Souza Lima',
-    responsible: 'Bruno Santos',
-    lastReport: '2026-02-10',
-    daysIdle: 63,
-    service: 'PAEFI',
-    urgency: 'critical',
-  },
-  {
-    id: 'case-16',
-    code: 'CAS-2026-0020',
-    name: 'Antônio Carlos Dias',
-    responsible: 'Ana Ferreira',
-    lastReport: '2026-03-01',
-    daysIdle: 44,
-    service: 'PAEFI',
-    urgency: 'critical',
-  },
-  {
-    id: 'case-15',
-    code: 'CAS-2025-0089',
-    name: 'Juliana Cristina Moreira',
-    responsible: 'Carla Mendes',
-    lastReport: '2026-02-28',
-    daysIdle: 45,
-    service: 'SEV',
-    urgency: 'critical',
-  },
-  {
-    id: 'case-11',
-    code: 'CAS-2025-0098',
-    name: 'Rosana Maria Cardoso',
-    responsible: 'Carla Mendes',
-    lastReport: '2026-03-28',
-    daysIdle: 18,
-    service: 'PAEFI',
-    urgency: 'warning',
-  },
-  {
-    id: 'case-12',
-    code: 'CAS-2026-0003',
-    name: 'Eduardo José Nascimento',
-    responsible: 'Ana Ferreira',
-    lastReport: '2026-04-02',
-    daysIdle: 13,
-    service: 'SEV',
-    urgency: 'warning',
-  },
-  {
-    id: 'case-09',
-    code: 'CAS-2025-0142',
-    name: 'Patrícia Gonçalves Silva',
-    responsible: 'Diego Lima',
-    lastReport: '2026-04-05',
-    daysIdle: 10,
-    service: 'PAEFI',
-    urgency: 'ok',
-  },
-];
-
-const MONTHLY_DATA: MonthlyData[] = [
-  { month: 'Nov', novos: 3, arquivados: 1 },
-  { month: 'Dez', novos: 5, arquivados: 2 },
-  { month: 'Jan', novos: 4, arquivados: 1 },
-  { month: 'Fev', novos: 6, arquivados: 3 },
-  { month: 'Mar', novos: 3, arquivados: 2 },
-  { month: 'Abr', novos: 7, arquivados: 4 },
-];
-
 // ─── Paletas de cor ──────────────────────────────────────────────────────────
 
 const CARD_COLORS = {
-  indigo: {
-    bg: 'bg-indigo-500/10',
-    icon: 'text-indigo-400',
-    ring: 'ring-indigo-500/20',
-  },
-  emerald: {
-    bg: 'bg-emerald-500/10',
-    icon: 'text-emerald-400',
-    ring: 'ring-emerald-500/20',
-  },
-  amber: {
-    bg: 'bg-amber-500/10',
-    icon: 'text-amber-400',
-    ring: 'ring-amber-500/20',
-  },
-  red: {
-    bg: 'bg-red-500/10',
-    icon: 'text-red-400',
-    ring: 'ring-red-500/20',
-  },
+  indigo: { bg: 'bg-indigo-500/10', icon: 'text-indigo-400', ring: 'ring-indigo-500/20' },
+  emerald: { bg: 'bg-emerald-500/10', icon: 'text-emerald-400', ring: 'ring-emerald-500/20' },
+  amber: { bg: 'bg-amber-500/10', icon: 'text-amber-400', ring: 'ring-amber-500/20' },
+  red: { bg: 'bg-red-500/10', icon: 'text-red-400', ring: 'ring-red-500/20' },
 };
 
 const URGENCY_CONFIG = {
-  critical: {
-    dot: 'bg-red-500',
-    badge: 'arquivado' as const,
-    label: 'Crítico',
-  },
-  warning: {
-    dot: 'bg-amber-400',
-    badge: 'novo' as const,
-    label: 'Alerta',
-  },
-  ok: {
-    dot: 'bg-slate-500',
-    badge: 'neutro' as const,
-    label: 'Normal',
-  },
+  critical: { dot: 'bg-red-500', badge: 'arquivado' as const, label: 'Crítico' },
+  warning: { dot: 'bg-amber-400', badge: 'novo' as const, label: 'Alerta' },
+  ok: { dot: 'bg-slate-500', badge: 'neutro' as const, label: 'Normal' },
 };
 
 // ─── Subcomponentes ───────────────────────────────────────────────────────────
@@ -221,7 +97,6 @@ function DeltaIndicator({ delta }: { delta: number }) {
 function MetricCardItem({ card }: { card: MetricCard }) {
   const Icon = card.icon;
   const colors = CARD_COLORS[card.color];
-
   return (
     <div
       className={cn('rounded-2xl bg-slate-900 ring-1 ring-slate-800 p-5', 'flex flex-col gap-4')}
@@ -238,7 +113,6 @@ function MetricCardItem({ card }: { card: MetricCard }) {
         </div>
         <DeltaIndicator delta={card.delta} />
       </div>
-
       <div>
         <p className="text-3xl font-bold text-slate-100 tabular-nums">{card.value}</p>
         <p className="mt-1 text-sm text-slate-500">{card.label}</p>
@@ -247,7 +121,6 @@ function MetricCardItem({ card }: { card: MetricCard }) {
   );
 }
 
-// Tooltip customizado para o funil
 function FunnelTooltipContent({
   active,
   payload,
@@ -257,20 +130,17 @@ function FunnelTooltipContent({
 }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
-  const total = PIPELINE_STAGES[0].value;
-  const pct = ((d.value / total) * 100).toFixed(0);
+  const total = d.value;
   return (
     <div className="rounded-xl bg-slate-800 ring-1 ring-slate-700 px-4 py-3 shadow-xl">
       <p className="text-sm font-semibold text-slate-100">{d.name}</p>
       <p className="text-xs text-slate-400 mt-0.5">
-        <span className="text-slate-100 font-bold">{d.value}</span> casos&nbsp;·&nbsp;
-        <span className="text-indigo-300">{pct}%</span> do total
+        <span className="text-slate-100 font-bold">{total}</span> casos
       </p>
     </div>
   );
 }
 
-// Tooltip customizado para o bar chart
 function BarTooltipContent({
   active,
   payload,
@@ -308,7 +178,117 @@ export default function Dashboard() {
     year: 'numeric',
   }).format(new Date());
 
-  const criticalCount = DEADLINE_ROWS.filter((r) => r.urgency === 'critical').length;
+  // ── Dados reais ──────────────────────────────────────────────────────────────
+  const { cases: novos, loading: loadingNovos } = useCases({ status: 'new' });
+  const { cases: ativos, loading: loadingAtivos } = useCases({ status: 'active' });
+  const { cases: arquivados, loading: loadingArquivados } = useCases({ status: 'archived' });
+  const { procedures, loading: loadingProc } = useProcedures();
+
+  const loading = loadingNovos || loadingAtivos || loadingArquivados || loadingProc;
+
+  // ── Cards de métricas ────────────────────────────────────────────────────────
+  const metricCards: MetricCard[] = useMemo(
+    () => [
+      { label: 'Casos Novos', value: novos.length, delta: 0, icon: Users, color: 'indigo' },
+      { label: 'Casos Ativos', value: ativos.length, delta: 0, icon: FolderOpen, color: 'emerald' },
+      {
+        label: 'Procedimentos Realizados',
+        value: procedures.length,
+        delta: 0,
+        icon: UserCheck,
+        color: 'amber',
+      },
+      { label: 'Arquivados', value: arquivados.length, delta: 0, icon: Archive, color: 'red' },
+    ],
+    [novos.length, ativos.length, procedures.length, arquivados.length],
+  );
+
+  // ── Funil do pipeline ────────────────────────────────────────────────────────
+  const pipelineStages: PipelineStage[] = useMemo(
+    () =>
+      [
+        { name: 'Entrada / Triagem', shortName: 'Triagem', value: novos.length, fill: '#6366f1' },
+        {
+          name: 'Em Atendimento Ativo',
+          shortName: 'Ativos',
+          value: ativos.length,
+          fill: '#818cf8',
+        },
+        { name: 'Encerramento', shortName: 'Encerr.', value: arquivados.length, fill: '#c7d2fe' },
+      ].filter((s) => s.value > 0),
+    [novos.length, ativos.length, arquivados.length],
+  );
+
+  // ── Casos próximos do prazo (sem relatório há mais dias) ─────────────────────
+  const todayMs = new Date().setHours(0, 0, 0, 0);
+  const deadlineRows = useMemo(() => {
+    return ativos
+      .map((c) => {
+        const daysIdle = c.ultimo_relatorio
+          ? Math.floor((todayMs - new Date(c.ultimo_relatorio).getTime()) / (1000 * 60 * 60 * 24))
+          : 999;
+        return {
+          id: c.id,
+          code: c.code ?? '—',
+          name: c.name,
+          responsible: c.responsible ?? '—',
+          lastReport: c.ultimo_relatorio ?? null,
+          daysIdle,
+          service: (c.profile ?? 'PAEFI') as 'PAEFI' | 'SEV',
+          urgency:
+            daysIdle > 30
+              ? ('critical' as const)
+              : daysIdle > 15
+                ? ('warning' as const)
+                : ('ok' as const),
+        };
+      })
+      .sort((a, b) => b.daysIdle - a.daysIdle)
+      .slice(0, 10);
+  }, [ativos, todayMs]);
+
+  const criticalCount = deadlineRows.filter((r) => r.urgency === 'critical').length;
+
+  // ── Dados mensais (últimos 6 meses a partir dos casos reais) ─────────────────
+  const monthlyData: MonthlyData[] = useMemo(() => {
+    const MONTH_LABELS = [
+      'Jan',
+      'Fev',
+      'Mar',
+      'Abr',
+      'Mai',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Set',
+      'Out',
+      'Nov',
+      'Dez',
+    ];
+    const now = new Date();
+    const result: MonthlyData[] = [];
+
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const m = d.getMonth();
+      const y = d.getFullYear();
+
+      const novosCount = novos.filter((c) => {
+        if (!c.created_at) return false;
+        const cd = new Date(c.created_at);
+        return cd.getMonth() === m && cd.getFullYear() === y;
+      }).length;
+
+      const arquivadosCount = arquivados.filter((c) => c.archived_year === y).length;
+
+      result.push({
+        month: MONTH_LABELS[m],
+        novos: novosCount,
+        arquivados: Math.round(arquivadosCount / 6),
+      });
+    }
+    return result;
+  }, [novos, arquivados]);
 
   return (
     <div className="space-y-8">
@@ -332,9 +312,14 @@ export default function Dashboard() {
 
       {/* ── 4 Cards de métricas ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {METRIC_CARDS.map((card) => (
-          <MetricCardItem key={card.label} card={card} />
-        ))}
+        {loading
+          ? Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="rounded-2xl bg-slate-900 ring-1 ring-slate-800 p-5 h-28 animate-pulse"
+              />
+            ))
+          : metricCards.map((card) => <MetricCardItem key={card.label} card={card} />)}
       </div>
 
       {/* ── Gráficos: funil + barras ── */}
@@ -345,18 +330,17 @@ export default function Dashboard() {
             <h3 className="text-sm font-semibold text-slate-200">Funil do Pipeline</h3>
             <p className="text-xs text-slate-500 mt-0.5">Distribuição de casos por etapa</p>
           </div>
-
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <FunnelChart>
                 <Tooltip content={<FunnelTooltipContent />} />
                 <Funnel
                   dataKey="value"
-                  data={PIPELINE_STAGES}
+                  data={pipelineStages}
                   isAnimationActive
                   animationDuration={600}
                 >
-                  {PIPELINE_STAGES.map((stage) => (
+                  {pipelineStages.map((stage) => (
                     <Cell key={stage.name} fill={stage.fill} />
                   ))}
                   <LabelList
@@ -377,23 +361,14 @@ export default function Dashboard() {
               </FunnelChart>
             </ResponsiveContainer>
           </div>
-
-          {/* Legenda */}
           <div className="mt-4 space-y-1.5">
-            {PIPELINE_STAGES.map((stage) => {
-              const pct = ((stage.value / PIPELINE_STAGES[0].value) * 100).toFixed(0);
-              return (
-                <div key={stage.name} className="flex items-center gap-2.5 text-xs">
-                  <span
-                    className="size-2.5 rounded-sm shrink-0"
-                    style={{ background: stage.fill }}
-                  />
-                  <span className="flex-1 text-slate-400">{stage.name}</span>
-                  <span className="font-semibold text-slate-300">{stage.value}</span>
-                  <span className="text-slate-600 w-8 text-right">{pct}%</span>
-                </div>
-              );
-            })}
+            {pipelineStages.map((stage) => (
+              <div key={stage.name} className="flex items-center gap-2.5 text-xs">
+                <span className="size-2.5 rounded-sm shrink-0" style={{ background: stage.fill }} />
+                <span className="flex-1 text-slate-400">{stage.name}</span>
+                <span className="font-semibold text-slate-300">{stage.value}</span>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -403,11 +378,10 @@ export default function Dashboard() {
             <h3 className="text-sm font-semibold text-slate-200">Casos por Mês</h3>
             <p className="text-xs text-slate-500 mt-0.5">Últimos 6 meses — Entradas vs Saídas</p>
           </div>
-
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={MONTHLY_DATA}
+                data={monthlyData}
                 barGap={3}
                 barCategoryGap="28%"
                 margin={{ top: 0, right: 0, bottom: 0, left: -20 }}
@@ -431,8 +405,6 @@ export default function Dashboard() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-
-          {/* Legenda */}
           <div className="mt-4 flex items-center gap-5">
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <span className="size-2.5 rounded-sm bg-indigo-500 shrink-0" />
@@ -457,95 +429,107 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <Clock className="size-3.5" />
-            <span>Referência: hoje, 15/04/2026</span>
+            <span>Referência: hoje</span>
           </div>
         </div>
 
-        {/* Tabela desktop */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-800">
-                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                  Código
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                  Nome
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 hidden md:table-cell">
-                  Responsável
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 hidden lg:table-cell">
-                  Último Relatório
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                  Serviço
-                </th>
-                <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                  Dias sem atualização
-                </th>
+                {[
+                  'Status',
+                  'Código',
+                  'Nome',
+                  'Responsável',
+                  'Último Relatório',
+                  'Serviço',
+                  'Dias sem atualização',
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
-              {DEADLINE_ROWS.map((row) => {
-                const urgency = URGENCY_CONFIG[row.urgency];
-                return (
-                  <tr key={row.id} className="hover:bg-slate-800/40 transition-colors duration-100">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className={cn('size-2 rounded-full shrink-0', urgency.dot)} />
-                        <Badge variant={urgency.badge}>{urgency.label}</Badge>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 font-mono text-xs text-slate-400">{row.code}</td>
-                    <td className="px-4 py-4 font-medium text-slate-200">{row.name}</td>
-                    <td className="px-4 py-4 text-slate-400 hidden md:table-cell">
-                      {row.responsible}
-                    </td>
-                    <td className="px-4 py-4 text-slate-400 hidden lg:table-cell">
-                      {formatDate(row.lastReport)}
-                    </td>
-                    <td className="px-4 py-4">
-                      <span
-                        className={cn(
-                          'text-xs font-semibold px-2 py-0.5 rounded-md',
-                          row.service === 'PAEFI'
-                            ? 'bg-indigo-500/10 text-indigo-300'
-                            : 'bg-emerald-500/10 text-emerald-300',
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-slate-500 text-sm">
+                    Carregando...
+                  </td>
+                </tr>
+              ) : deadlineRows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-slate-500 text-sm">
+                    Nenhum caso ativo encontrado.
+                  </td>
+                </tr>
+              ) : (
+                deadlineRows.map((row) => {
+                  const urgency = URGENCY_CONFIG[row.urgency];
+                  return (
+                    <tr
+                      key={row.id}
+                      className="hover:bg-slate-800/40 transition-colors duration-100"
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className={cn('size-2 rounded-full shrink-0', urgency.dot)} />
+                          <Badge variant={urgency.badge}>{urgency.label}</Badge>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 font-mono text-xs text-slate-400">{row.code}</td>
+                      <td className="px-4 py-4 font-medium text-slate-200">{row.name}</td>
+                      <td className="px-4 py-4 text-slate-400">{row.responsible}</td>
+                      <td className="px-4 py-4 text-slate-400">
+                        {row.lastReport ? (
+                          formatDate(row.lastReport)
+                        ) : (
+                          <span className="text-slate-600">—</span>
                         )}
-                      >
-                        {row.service}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span
-                        className={cn(
-                          'text-sm font-bold tabular-nums',
-                          row.urgency === 'critical' && 'text-red-400',
-                          row.urgency === 'warning' && 'text-amber-400',
-                          row.urgency === 'ok' && 'text-slate-400',
-                        )}
-                      >
-                        {row.daysIdle}d
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+                      </td>
+                      <td className="px-4 py-4">
+                        <span
+                          className={cn(
+                            'text-xs font-semibold px-2 py-0.5 rounded-md',
+                            row.service === 'PAEFI'
+                              ? 'bg-indigo-500/10 text-indigo-300'
+                              : 'bg-emerald-500/10 text-emerald-300',
+                          )}
+                        >
+                          {row.service}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span
+                          className={cn(
+                            'text-sm font-bold tabular-nums',
+                            row.urgency === 'critical' && 'text-red-400',
+                            row.urgency === 'warning' && 'text-amber-400',
+                            row.urgency === 'ok' && 'text-slate-400',
+                          )}
+                        >
+                          {row.daysIdle === 999 ? '—' : `${row.daysIdle}d`}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
 
-        {/* Rodapé da tabela */}
         <div className="px-6 py-3 border-t border-slate-800 flex items-center justify-between">
           <p className="text-xs text-slate-600">
             Casos marcados como <span className="text-red-400 font-medium">Crítico</span> têm mais
-            de 30 dias sem relatório registrado.
+            de 30 dias sem relatório.
           </p>
-          <span className="text-xs text-slate-600">{DEADLINE_ROWS.length} casos exibidos</span>
+          <span className="text-xs text-slate-600">{deadlineRows.length} casos exibidos</span>
         </div>
       </div>
     </div>

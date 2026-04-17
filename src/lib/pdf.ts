@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { type ProcedureRecord } from '@/types/procedure';
-import { aggregateRMA, RMAColumn } from '@/utils/rmaMapping';
+import { type DbProcedure } from '@/lib/supabase';
+import { aggregateRMAFromDb, RMAColumn } from '@/utils/rmaMapping';
 
 // ─── Labels das colunas RMA (ordem oficial) ───────────────────────────────────
 
@@ -31,7 +31,7 @@ const RMA_LABELS: { key: RMAColumn; label: string }[] = [
 ];
 
 export interface RMAPDFOptions {
-  procedures: ProcedureRecord[];
+  procedures: DbProcedure[];
   month: string;
   year: string;
   service: string;
@@ -67,10 +67,10 @@ export function generateRMAPDF({
   doc.text(`Referência: ${month}/${year}`, 14, 26);
 
   // ── Tabela por técnico ────────────────────────────────────────────────────────
-  // Agrupa por responsável
-  const byResponsavel: Record<string, ProcedureRecord[]> = {};
+  // Agrupa por campo category (responsável no schema do Supabase)
+  const byResponsavel: Record<string, DbProcedure[]> = {};
   for (const p of procedures) {
-    const key = p.responsavel || 'Não informado';
+    const key = p.category || 'Não informado';
     if (!byResponsavel[key]) byResponsavel[key] = [];
     byResponsavel[key].push(p);
   }
@@ -79,12 +79,12 @@ export function generateRMAPDF({
   const body: (string | number)[][] = [];
 
   for (const [responsavel, procs] of Object.entries(byResponsavel)) {
-    const totals = aggregateRMA(procs);
+    const totals = aggregateRMAFromDb(procs);
     body.push([responsavel, ...RMA_LABELS.map((c) => totals[c.key] || 0)]);
   }
 
   // Linha de total geral
-  const totalGeral = aggregateRMA(procedures);
+  const totalGeral = aggregateRMAFromDb(procedures);
   body.push(['TOTAL GERAL', ...RMA_LABELS.map((c) => totalGeral[c.key] || 0)]);
 
   autoTable(doc, {
@@ -93,7 +93,6 @@ export function generateRMAPDF({
     startY: 32,
     styles: { fontSize: 6.5, cellPadding: 1.5 },
     headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold', fontSize: 6 },
-    footStyles: { fillColor: [30, 41, 59] },
     didParseCell: (data) => {
       // Destaca linha de total geral
       if (data.row.index === body.length - 1) {
@@ -101,7 +100,7 @@ export function generateRMAPDF({
         data.cell.styles.fillColor = [30, 41, 59];
         data.cell.styles.textColor = 255;
       }
-      // Destaca células zeradas em amarelo
+      // Células zeradas em cinza
       if (data.section === 'body' && data.column.index > 0) {
         const val = Number(data.cell.raw);
         if (val === 0 && data.row.index < body.length - 1) {
