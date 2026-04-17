@@ -81,7 +81,7 @@ function AbaRMA({
   const totalGeral = useMemo(() => aggregateRMAFromDb(procedimentos), [procedimentos]);
 
   function handleExportPDF() {
-    generateRMAPDF({ procedures: [] as never[], month: mes, year: ano, service: servico });
+    generateRMAPDF({ procedures: procedimentos, month: mes, year: ano, service: servico });
   }
 
   if (procedimentos.length === 0) {
