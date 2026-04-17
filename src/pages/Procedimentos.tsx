@@ -5,14 +5,14 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
-import { MOCK_CASES, MOCK_PROCEDURES } from '@/lib/mockData';
-import { getAge } from '@/utils/ageRange';
+import { useCases } from '@/hooks/useCases';
+import { useProcedures } from '@/hooks/useProcedures';
 import { ageRangeToRMAColumns } from '@/utils/rmaMapping';
-import { type ProcedureRecord } from '@/types/procedure';
+import { type DbProcedure } from '@/lib/supabase';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
-type ProcedimentoMock = ProcedureRecord;
+type ProcedimentoMock = DbProcedure;
 
 interface ProcedimentoForm {
   codigoVincular: string;
@@ -104,28 +104,28 @@ const MESES = [
 // ─── Colunas da tabela (ordem exata do colunas.txt) ──────────────────────────
 
 const COLUNAS: { key: keyof ProcedimentoMock; label: string }[] = [
-  { key: 'contatosExito', label: 'Contatos com êxito' },
-  { key: 'telefonicasSemExito', label: 'Telefônicos sem êxito' },
-  { key: 'atendimentoIndividualizado', label: 'Atendimento Individualizado' },
-  { key: 'atendimentoEmGrupo', label: 'Atendimento em Grupo' },
-  { key: 'encaminhamentoCRAS', label: 'Encaminhamento p/ CRAS' },
-  { key: 'visitasDomiciliar', label: 'Visitas Domiciliar' },
-  { key: 'visitasInstitucional', label: 'Visitas Institucional' },
-  { key: 'visitasSemExito', label: 'Visitas sem êxito' },
-  { key: 'casosDesligados', label: 'Casos Desligados' },
-  { key: 'outrosEncaminhamentos', label: 'Outros encaminhamentos' },
-  { key: 'reuniaoFamiliar', label: 'Reunião Familiar' },
+  { key: 'contatos_com_exito', label: 'Contatos com êxito' },
+  { key: 'telefonicos_sem_exito', label: 'Telefônicos sem êxito' },
+  { key: 'atendimento_individualizado', label: 'Atendimento Individualizado' },
+  { key: 'atendimento_em_grupo', label: 'Atendimento em Grupo' },
+  { key: 'encaminhamento_cras', label: 'Encaminhamento p/ CRAS' },
+  { key: 'visita_domiciliar', label: 'Visitas Domiciliar' },
+  { key: 'visita_institucional', label: 'Visitas Institucional' },
+  { key: 'visita_sem_exito', label: 'Visitas sem êxito' },
+  { key: 'casos_desligados', label: 'Casos Desligados' },
+  { key: 'outros_encaminhamentos', label: 'Outros encaminhamentos' },
+  { key: 'reuniao_familiar', label: 'Reunião Familiar' },
   { key: 'palestras', label: 'Palestras' },
-  { key: 'prontuarioSUAS', label: 'Prontuário SUAS' },
+  { key: 'prontuario_suas', label: 'Prontuário SUAS' },
   { key: 'relatorios', label: 'Relatórios' },
   { key: 'pias', label: "PIA's" },
   { key: 'parecer', label: 'Parecer' },
-  { key: 'atendidos0a10', label: 'Atendidos (0 a 10 anos)' },
-  { key: 'atendimentos0a10', label: 'Atendimentos (0 a 10 anos)' },
-  { key: 'atendidos11a17', label: 'Atendidos (11 a 17 anos)' },
-  { key: 'atendimentos11a17', label: 'Atendimentos (11 a 17 anos)' },
-  { key: 'mulheresViolencia', label: 'Mulheres vítimas de Violência' },
-  { key: 'outros', label: 'Outros' },
+  { key: 'atendidos_0_10_anos', label: 'Atendidos (0 a 10 anos)' },
+  { key: 'atendimentos_0_10_anos', label: 'Atendimentos (0 a 10 anos)' },
+  { key: 'atendidos_11_17_anos', label: 'Atendidos (11 a 17 anos)' },
+  { key: 'atendimentos_11_17_anos', label: 'Atendimentos (11 a 17 anos)' },
+  { key: 'mulheres_atendidas_violencia', label: 'Mulheres vítimas de Violência' },
+  { key: 'others', label: 'Outros' },
 ];
 
 // ─── Componente ──────────────────────────────────────────────────────────────
@@ -136,10 +136,14 @@ export default function Procedimentos() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<ProcedimentoForm>(FORM_EMPTY);
   const [buscaStatus, setBuscaStatus] = useState<'idle' | 'found' | 'notfound'>('idle');
+  const [saving, setSaving] = useState(false);
 
-  const procedimentosFiltrados = MOCK_PROCEDURES.filter(
-    (p) => p.mes === mesFiltro && p.ano.toString() === anoFiltro,
-  );
+  const {
+    procedures: procedimentosFiltrados,
+    loading,
+    createProcedure,
+  } = useProcedures(mesFiltro, anoFiltro);
+  const { cases: allCases, getCaseByCode } = useCases();
 
   function setField<K extends keyof ProcedimentoForm>(key: K, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -147,27 +151,51 @@ export default function Procedimentos() {
 
   // ── Autopreenchimento ao localizar caso pelo código ──────────────────────
 
-  function handleLocalizar() {
+  async function handleLocalizar() {
     const codigo = form.codigoVincular.trim();
-    const caso = MOCK_CASES.find((c) => c.code.toLowerCase() === codigo.toLowerCase());
+    if (!codigo) return;
+
+    const caso = await getCaseByCode(codigo);
 
     if (!caso) {
-      setBuscaStatus('notfound');
+      // fallback: busca local na lista já carregada
+      const local = allCases.find((c) => c.code?.toLowerCase() === codigo.toLowerCase());
+      if (!local) {
+        setBuscaStatus('notfound');
+        return;
+      }
+      const idadeNum = local.age ?? 0;
+      const faixaRMA = ageRangeToRMAColumns(idadeNum);
+      setForm((prev) => ({
+        ...prev,
+        nome: local.name,
+        servico: local.profile ?? prev.servico,
+        responsavel: local.responsible ?? '',
+        nacionalidade: local.nationality ?? 'Brasileira',
+        sexo: local.sex ?? '',
+        idade: String(idadeNum),
+        atendidos0a10: faixaRMA?.atendidos === 'atendidos0a10' ? '1' : prev.atendidos0a10,
+        atendimentos0a10:
+          faixaRMA?.atendimentos === 'atendimentos0a10' ? '1' : prev.atendimentos0a10,
+        atendidos11a17: faixaRMA?.atendidos === 'atendidos11a17' ? '1' : prev.atendidos11a17,
+        atendimentos11a17:
+          faixaRMA?.atendimentos === 'atendimentos11a17' ? '1' : prev.atendimentos11a17,
+      }));
+      setBuscaStatus('found');
       return;
     }
 
-    const idade = getAge(caso.birthDate);
-    const faixaRMA = ageRangeToRMAColumns(idade);
+    const idadeNum = caso.age ?? 0;
+    const faixaRMA = ageRangeToRMAColumns(idadeNum);
 
     setForm((prev) => ({
       ...prev,
       nome: caso.name,
-      servico: caso.service,
-      responsavel: caso.responsibleName,
-      nacionalidade: 'Brasileira',
-      sexo: '',
-      idade: String(idade),
-      // preenche colunas de faixa etária automaticamente
+      servico: caso.profile ?? prev.servico,
+      responsavel: caso.responsible ?? '',
+      nacionalidade: caso.nationality ?? 'Brasileira',
+      sexo: caso.sex ?? '',
+      idade: String(idadeNum),
       atendidos0a10: faixaRMA?.atendidos === 'atendidos0a10' ? '1' : prev.atendidos0a10,
       atendimentos0a10: faixaRMA?.atendimentos === 'atendimentos0a10' ? '1' : prev.atendimentos0a10,
       atendidos11a17: faixaRMA?.atendidos === 'atendidos11a17' ? '1' : prev.atendidos11a17,
@@ -177,7 +205,45 @@ export default function Procedimentos() {
     setBuscaStatus('found');
   }
 
-  function handleSalvar() {
+  async function handleSalvar() {
+    setSaving(true);
+    await createProcedure({
+      case_id: null,
+      name: form.nome || null,
+      month: form.mes || null,
+      year: parseInt(form.ano, 10) || null,
+      service: form.servico || null,
+      category: null,
+      sex: form.sexo || null,
+      age: parseInt(form.idade, 10) || null,
+      nationality: form.nacionalidade || null,
+      date: form.data || null,
+      institution: null,
+      contatos_com_exito: parseInt(form.contatosExito, 10) || null,
+      telefonicos_sem_exito: parseInt(form.telefonicasSemExito, 10) || null,
+      atendimento_individualizado: parseInt(form.atendimentoIndividualizado, 10) || null,
+      atendimento_em_grupo: parseInt(form.atendimentoEmGrupo, 10) || null,
+      encaminhamento_cras: parseInt(form.encaminhamentoCRAS, 10) || null,
+      visita_domiciliar: parseInt(form.visitasDomiciliar, 10) || null,
+      visita_institucional: parseInt(form.visitasInstitucional, 10) || null,
+      visita_sem_exito: parseInt(form.visitasSemExito, 10) || null,
+      casos_desligados: parseInt(form.casosDesligados, 10) || null,
+      outros_encaminhamentos: parseInt(form.outrosEncaminhamentos, 10) || null,
+      reuniao_familiar: parseInt(form.reuniaoFamiliar, 10) || null,
+      palestras: parseInt(form.palestras, 10) || null,
+      prontuario_suas: parseInt(form.prontuarioSUAS, 10) || null,
+      relatorios: parseInt(form.relatorios, 10) || null,
+      pias: parseInt(form.pias, 10) || null,
+      parecer: parseInt(form.parecer, 10) || null,
+      atendidos_0_10_anos: parseInt(form.atendidos0a10, 10) || null,
+      atendimentos_0_10_anos: parseInt(form.atendimentos0a10, 10) || null,
+      atendidos_11_17_anos: parseInt(form.atendidos11a17, 10) || null,
+      atendimentos_11_17_anos: parseInt(form.atendimentos11a17, 10) || null,
+      mulheres_atendidas_violencia: parseInt(form.mulheresViolencia, 10) || null,
+      others: form.outros || null,
+      user_id: null,
+    });
+    setSaving(false);
     setModalOpen(false);
     setForm(FORM_EMPTY);
     setBuscaStatus('idle');
@@ -189,9 +255,10 @@ export default function Procedimentos() {
     setBuscaStatus('idle');
   }
 
-  // helper: valor numérico de uma linha
+  // helper: valor numérico de uma coluna
   function val(p: ProcedimentoMock, key: keyof ProcedimentoMock): number {
-    return (p[key] as number) ?? 0;
+    const v = p[key];
+    return typeof v === 'number' ? v : 0;
   }
 
   return (
@@ -273,7 +340,13 @@ export default function Procedimentos() {
             </thead>
 
             <tbody className="divide-y divide-slate-800/60">
-              {procedimentosFiltrados.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={33} className="py-16 text-center text-slate-500 text-sm">
+                    Carregando...
+                  </td>
+                </tr>
+              ) : procedimentosFiltrados.length === 0 ? (
                 <tr>
                   <td colSpan={33} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-3 text-slate-500">
@@ -295,26 +368,26 @@ export default function Procedimentos() {
                 procedimentosFiltrados.map((p, idx) => (
                   <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
                     <td className="px-3 py-3 text-slate-500">{idx + 1}</td>
-                    <td className="px-3 py-3 font-medium text-slate-200">{p.caseName}</td>
-                    <td className="px-3 py-3 text-slate-400">{p.mes}</td>
-                    <td className="px-3 py-3 text-slate-400">{p.ano}</td>
+                    <td className="px-3 py-3 font-medium text-slate-200">{p.name ?? '—'}</td>
+                    <td className="px-3 py-3 text-slate-400">{p.month ?? '—'}</td>
+                    <td className="px-3 py-3 text-slate-400">{p.year ?? '—'}</td>
                     <td className="px-3 py-3">
                       <span
                         className={cn(
                           'text-xs font-semibold px-2 py-0.5 rounded-md',
-                          p.servico === 'PAEFI'
+                          p.service === 'PAEFI'
                             ? 'bg-indigo-500/10 text-indigo-300'
                             : 'bg-emerald-500/10 text-emerald-300',
                         )}
                       >
-                        {p.servico}
+                        {p.service ?? '—'}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-slate-400">{p.sexo}</td>
-                    <td className="px-3 py-3 text-slate-400">{p.idade}</td>
-                    <td className="px-3 py-3 text-slate-400">{p.nacionalidade}</td>
-                    <td className="px-3 py-3 text-slate-400">{p.data}</td>
-                    <td className="px-3 py-3 text-slate-400">{p.instituicao}</td>
+                    <td className="px-3 py-3 text-slate-400">{p.sex ?? '—'}</td>
+                    <td className="px-3 py-3 text-slate-400">{p.age ?? '—'}</td>
+                    <td className="px-3 py-3 text-slate-400">{p.nationality ?? '—'}</td>
+                    <td className="px-3 py-3 text-slate-400">{p.date ?? '—'}</td>
+                    <td className="px-3 py-3 text-slate-400">{p.institution ?? '—'}</td>
                     {COLUNAS.map((col) => {
                       const v = val(p, col.key);
                       return (
@@ -605,8 +678,8 @@ export default function Procedimentos() {
             <Button variant="ghost" onClick={handleFecharModal}>
               Cancelar
             </Button>
-            <Button variant="primary" onClick={handleSalvar}>
-              Salvar Procedimento
+            <Button variant="primary" onClick={handleSalvar} disabled={saving}>
+              {saving ? 'Salvando...' : 'Salvar Procedimento'}
             </Button>
           </div>
         </div>

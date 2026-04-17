@@ -5,10 +5,8 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { MOCK_CASES } from '@/lib/mockData';
-import { CaseStatus } from '@/types/case';
+import { useCases } from '@/hooks/useCases';
 import { normalizeSearch } from '@/utils/normalizeSearch';
-import { formatDate } from '@/utils/formatDate';
 
 // ─── Tipos do formulário ─────────────────────────────────────────────────────
 
@@ -50,26 +48,57 @@ const FORM_EMPTY: ArquivarForm = {
   observacoes: '',
 };
 
-// ─── Dados ───────────────────────────────────────────────────────────────────
-
-const CASOS_ARQUIVADOS = MOCK_CASES.filter((c) => c.status === CaseStatus.ARCHIVED);
-
 // ─── Componente ──────────────────────────────────────────────────────────────
 
 export default function Arquivados() {
   const [busca, setBusca] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<ArquivarForm>(FORM_EMPTY);
+  const [saving, setSaving] = useState(false);
 
-  const casosVisiveis = CASOS_ARQUIVADOS.filter((c) =>
-    normalizeSearch(c.name + c.code + c.cpf).includes(normalizeSearch(busca)),
+  const { cases, loading, createCase } = useCases({ status: 'archived' });
+
+  const casosVisiveis = cases.filter((c) =>
+    normalizeSearch((c.name ?? '') + (c.code ?? '') + (c.cpf ?? '')).includes(
+      normalizeSearch(busca),
+    ),
   );
 
   function setField<K extends keyof ArquivarForm>(key: K, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleSalvar() {
+  async function handleSalvar() {
+    setSaving(true);
+    await createCase({
+      name: form.nomeCompleto,
+      year: parseInt(form.ano, 10) || null,
+      profile: form.perfil || null,
+      responsible: form.responsavel || null,
+      age: parseInt(form.idade, 10) || null,
+      sex: form.sexo || null,
+      nationality: form.nacionalidade || null,
+      address: form.endereco || null,
+      neighborhood: form.bairro || null,
+      phone: form.telefone || null,
+      violence_type: form.tipoViolencia || null,
+      code: form.codigo || null,
+      description: form.motivoDesligamento || null,
+      status: 'archived',
+      cpf: null,
+      birth_date: null,
+      was_new: false,
+      category: null,
+      reference_month: null,
+      document_date: null,
+      received_date: null,
+      origin: null,
+      archived_month: null,
+      archived_year: parseInt(form.ano, 10) || null,
+      ultimo_relatorio: null,
+      user_id: null,
+    });
+    setSaving(false);
     setModalOpen(false);
     setForm(FORM_EMPTY);
   }
@@ -140,7 +169,13 @@ export default function Arquivados() {
             </thead>
 
             <tbody className="divide-y divide-slate-800/60">
-              {casosVisiveis.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={16} className="py-16 text-center text-slate-500 text-sm">
+                    Carregando...
+                  </td>
+                </tr>
+              ) : casosVisiveis.length === 0 ? (
                 <tr>
                   <td colSpan={16} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-3 text-slate-500">
@@ -151,9 +186,7 @@ export default function Arquivados() {
                 </tr>
               ) : (
                 casosVisiveis.map((caso, idx) => {
-                  const anoEntrada = new Date(caso.entryDate).getFullYear();
-                  const motivoLabel = caso.archiveReason ?? '—';
-
+                  const motivoLabel = caso.description ?? '—';
                   return (
                     <tr
                       key={caso.id}
@@ -164,31 +197,30 @@ export default function Arquivados() {
                         <span
                           className={cn(
                             'text-xs font-semibold px-2 py-0.5 rounded-md',
-                            caso.service === 'PAEFI'
+                            caso.profile === 'PAEFI'
                               ? 'bg-indigo-500/10 text-indigo-300'
                               : 'bg-emerald-500/10 text-emerald-300',
                           )}
                         >
-                          {caso.service}
+                          {caso.profile ?? '—'}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-slate-400">{anoEntrada}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.year ?? '—'}</td>
                       <td className="px-3 py-3 font-medium text-slate-400">{caso.name}</td>
                       <td className="px-3 py-3 text-slate-400">
-                        {caso.archiveDate ? formatDate(caso.archiveDate) : '—'}
+                        {caso.archived_year
+                          ? `${caso.archived_month ?? ''} ${caso.archived_year}`
+                          : '—'}
                       </td>
-                      <td className="px-3 py-3 text-slate-400">{caso.responsibleName}</td>
-                      <td className="px-3 py-3 text-slate-400">
-                        {new Date().getFullYear() - new Date(caso.birthDate).getFullYear()}
-                      </td>
-                      <td className="px-3 py-3 text-slate-400">—</td>
-                      <td className="px-3 py-3 text-slate-400">{caso.address}</td>
-                      <td className="px-3 py-3 text-slate-400">{caso.neighborhood}</td>
-                      <td className="px-3 py-3 text-slate-400">—</td>
-                      <td className="px-3 py-3 text-slate-400">
-                        {caso.entryReason.replace(/_/g, ' ')}
-                      </td>
-                      <td className="px-3 py-3 font-mono text-slate-500">{caso.code}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.responsible ?? '—'}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.age ?? '—'}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.sex ?? '—'}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.nationality ?? '—'}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.address ?? '—'}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.neighborhood ?? '—'}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.phone ?? '—'}</td>
+                      <td className="px-3 py-3 text-slate-400">{caso.violence_type ?? '—'}</td>
+                      <td className="px-3 py-3 font-mono text-slate-500">{caso.code ?? '—'}</td>
                       <td
                         className="px-3 py-3 text-slate-400 max-w-48 truncate"
                         title={motivoLabel}
@@ -379,8 +411,8 @@ export default function Arquivados() {
             >
               Cancelar
             </Button>
-            <Button variant="danger" onClick={handleSalvar}>
-              Salvar Registro Completo
+            <Button variant="danger" onClick={handleSalvar} disabled={saving}>
+              {saving ? 'Salvando...' : 'Salvar Registro Completo'}
             </Button>
           </div>
         </div>

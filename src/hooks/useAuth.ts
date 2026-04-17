@@ -8,7 +8,7 @@ export interface AuthContextValue {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => void | Promise<void>;
   updateProfile: (data: Partial<Pick<UserProfile, 'name' | 'unit'>>) => void;
 }
 

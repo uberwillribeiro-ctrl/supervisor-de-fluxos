@@ -1,75 +1,104 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { AuthContext, STORAGE_KEY, loadUser, type AuthContextValue } from '@/hooks/useAuth';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { AuthContext, type AuthContextValue } from '@/hooks/useAuth';
 import { type UserProfile, UserRole } from '@/types/user';
+import { supabase } from '@/lib/supabase';
+
+// ─── Converte perfil do Supabase → UserProfile ────────────────────────────────
+
+function roleFromString(role: string | null): UserRole {
+  if (role === 'admin') return UserRole.ADMIN;
+  if (role === 'coordinator') return UserRole.COORDINATOR;
+  return UserRole.TECHNICIAN;
+}
+
+function buildUserProfile(
+  authId: string,
+  email: string,
+  profile: { name: string | null; role: string | null } | null,
+): UserProfile {
+  return {
+    id: authId,
+    name:
+      profile?.name ??
+      email
+        .split('@')[0]
+        .replace(/[._-]/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase()),
+    email,
+    role: roleFromString(profile?.role ?? null),
+    unit: 'CREAS Centro',
+    createdAt: new Date().toISOString(),
+  };
+}
+
+// ─── Provider ────────────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserProfile | null>(loadUser);
-  const [isLoading, setIsLoading] = useState(false);
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const persist = useCallback((u: UserProfile | null) => {
-    setUser(u);
-    if (u) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
-    } else {
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem('sf_workspace');
-    }
+  // Busca o perfil na tabela profiles
+  async function fetchProfile(authId: string, email: string): Promise<UserProfile> {
+    const { data } = await supabase.from('profiles').select('name, role').eq('id', authId).single();
+    return buildUserProfile(authId, email, data ?? null);
+  }
+
+  // Inicializa sessão ao montar (persiste o login entre recarregamentos)
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        const profile = await fetchProfile(session.user.id, session.user.email ?? '');
+        setUser(profile);
+      }
+      setIsLoading(false);
+    });
+
+    // Listener para mudanças de auth (login / logout em outra aba)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const profile = await fetchProfile(session.user.id, session.user.email ?? '');
+        setUser(profile);
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = useCallback(
-    async (email: string, _password: string) => {
-      setIsLoading(true);
-      await new Promise<void>((resolve) => setTimeout(resolve, 900));
-
-      const mockUser: UserProfile = {
-        id: `user_${Date.now()}`,
-        name: email
-          .split('@')[0]
-          .replace(/[._-]/g, ' ')
-          .replace(/\b\w/g, (c) => c.toUpperCase()),
-        email,
-        role: UserRole.ADMIN,
-        unit: 'CREAS Centro',
-        createdAt: new Date().toISOString(),
-      };
-
-      persist(mockUser);
+  const login = useCallback(async (email: string, password: string) => {
+    setIsLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
       setIsLoading(false);
-    },
-    [persist],
-  );
+      throw new Error(error.message);
+    }
+    setIsLoading(false);
+  }, []);
 
-  const register = useCallback(
-    async (name: string, email: string, _password: string) => {
-      setIsLoading(true);
-      await new Promise<void>((resolve) => setTimeout(resolve, 1000));
-
-      const newUser: UserProfile = {
-        id: `user_${Date.now()}`,
-        name,
-        email,
-        role: UserRole.ADMIN,
-        unit: '',
-        createdAt: new Date().toISOString(),
-      };
-
-      persist(newUser);
+  const register = useCallback(async (name: string, email: string, password: string) => {
+    setIsLoading(true);
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) {
       setIsLoading(false);
-    },
-    [persist],
-  );
+      throw new Error(error.message);
+    }
+    // Cria perfil na tabela profiles
+    if (data.user) {
+      await supabase.from('profiles').upsert({ id: data.user.id, name, role: 'technician' });
+    }
+    setIsLoading(false);
+  }, []);
 
-  const logout = useCallback(() => {
-    persist(null);
-  }, [persist]);
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+  }, []);
 
   const updateProfile = useCallback((data: Partial<Pick<UserProfile, 'name' | 'unit'>>) => {
-    setUser((prev) => {
-      if (!prev) return prev;
-      const updated = { ...prev, ...data };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      return updated;
-    });
+    setUser((prev) => (prev ? { ...prev, ...data } : prev));
   }, []);
 
   const value = useMemo<AuthContextValue>(
