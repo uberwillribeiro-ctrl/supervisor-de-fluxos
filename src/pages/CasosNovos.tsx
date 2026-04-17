@@ -5,9 +5,11 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
+import { useToast } from '@/components/ui/Toast';
 import { useCases } from '@/hooks/useCases';
 import { normalizeSearch } from '@/utils/normalizeSearch';
 import { formatDate } from '@/utils/formatDate';
+import { type DbCase } from '@/lib/supabase';
 
 // ─── Tipos do formulário ─────────────────────────────────────────────────────
 
@@ -68,15 +70,41 @@ const MESES = [
   'Dezembro',
 ];
 
+function casoToForm(c: DbCase): NovoRegistroForm {
+  return {
+    codigoPuxar: c.code ?? '',
+    nomeCompleto: c.name,
+    ano: c.year ? String(c.year) : '2026',
+    mesReferencia: c.reference_month ?? '',
+    perfil: c.profile ?? 'PAEFI',
+    responsavel: c.responsible ?? '',
+    idade: c.age ? String(c.age) : '',
+    sexo: c.sex ?? 'Masculino (M)',
+    nacionalidade: c.nationality ?? 'Brasileira',
+    telefone: c.phone ?? '',
+    endereco: c.address ?? '',
+    bairro: c.neighborhood ?? '',
+    tipoViolencia: c.violence_type ?? '',
+    codigo: c.code ?? '',
+    origem: c.origin ?? '',
+    dataDocumento: c.document_date ?? '',
+    dataRecebido: c.received_date ?? '',
+    descricao: c.description ?? '',
+  };
+}
+
 // ─── Componente ──────────────────────────────────────────────────────────────
 
 export default function CasosNovos() {
   const [busca, setBusca] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<NovoRegistroForm>(FORM_EMPTY);
   const [saving, setSaving] = useState(false);
+  const [activating, setActivating] = useState<number | null>(null);
 
-  const { cases, loading, createCase } = useCases({ status: 'new' });
+  const { cases, loading, createCase, updateCase, archiveCase } = useCases({ status: 'new' });
+  const { success, error: toastError } = useToast();
 
   const casosVisiveis = cases.filter((c) =>
     normalizeSearch((c.name ?? '') + (c.code ?? '') + (c.cpf ?? '')).includes(
@@ -88,9 +116,26 @@ export default function CasosNovos() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  function openEdit(caso: DbCase) {
+    setEditingId(caso.id);
+    setForm(casoToForm(caso));
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setEditingId(null);
+    setForm(FORM_EMPTY);
+  }
+
   async function handleSalvar() {
+    if (!form.nomeCompleto.trim()) {
+      toastError('Nome completo é obrigatório.');
+      return;
+    }
     setSaving(true);
-    await createCase({
+
+    const payload = {
       name: form.nomeCompleto,
       year: parseInt(form.ano, 10) || null,
       reference_month: form.mesReferencia || null,
@@ -108,19 +153,57 @@ export default function CasosNovos() {
       received_date: form.dataRecebido || null,
       origin: form.origem || null,
       description: form.descricao || null,
-      status: 'new',
-      cpf: null,
-      birth_date: null,
-      was_new: true,
-      category: null,
-      archived_month: null,
-      archived_year: null,
-      ultimo_relatorio: null,
-      user_id: null,
-    });
+    };
+
+    if (editingId !== null) {
+      const result = await updateCase(editingId, payload);
+      if (result.error) {
+        toastError('Erro ao atualizar: ' + result.error);
+      } else {
+        success('Registro atualizado com sucesso.');
+      }
+    } else {
+      const result = await createCase({
+        ...payload,
+        status: 'new',
+        cpf: null,
+        birth_date: null,
+        was_new: true,
+        category: null,
+        archived_month: null,
+        archived_year: null,
+        ultimo_relatorio: null,
+        user_id: null,
+      });
+      if (result.error) {
+        toastError('Erro ao salvar: ' + result.error);
+      } else {
+        success('Registro salvo com sucesso.');
+      }
+    }
+
     setSaving(false);
-    setModalOpen(false);
-    setForm(FORM_EMPTY);
+    closeModal();
+  }
+
+  async function handleAtivar(id: number) {
+    setActivating(id);
+    const result = await updateCase(id, { status: 'active' });
+    if (result.error) {
+      toastError('Erro ao ativar caso: ' + result.error);
+    } else {
+      success('Caso movido para Ativos.');
+    }
+    setActivating(null);
+  }
+
+  async function handleArquivar(id: number) {
+    const result = await archiveCase(id, '', '', 2026);
+    if (result.error) {
+      toastError('Erro ao arquivar: ' + result.error);
+    } else {
+      success('Caso arquivado.');
+    }
   }
 
   return (
@@ -133,7 +216,6 @@ export default function CasosNovos() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Busca */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-500" />
             <input
@@ -148,7 +230,6 @@ export default function CasosNovos() {
               )}
             />
           </div>
-
           <Button variant="primary" size="sm" onClick={() => setModalOpen(true)}>
             <Plus className="size-3.5 mr-1" />
             Adicionar cadastro
@@ -224,8 +305,10 @@ export default function CasosNovos() {
                     <td className="px-3 py-3 text-slate-500">{idx + 1}</td>
                     <td className="px-3 py-3">
                       <button
-                        className="size-6 rounded-md bg-slate-700 hover:bg-indigo-600 transition-colors flex items-center justify-center"
-                        title="Ativar"
+                        onClick={() => handleAtivar(caso.id)}
+                        disabled={activating === caso.id}
+                        className="size-6 rounded-md bg-slate-700 hover:bg-emerald-600 transition-colors flex items-center justify-center disabled:opacity-50"
+                        title="Ativar caso"
                       >
                         <span className="size-2 rounded-full bg-slate-400" />
                       </button>
@@ -250,6 +333,7 @@ export default function CasosNovos() {
                     <td className="px-3 py-3 text-slate-400">{caso.responsible ?? '—'}</td>
                     <td className="px-3 py-3 text-slate-400">{caso.age ?? '—'}</td>
                     <td className="px-3 py-3 text-slate-400">{caso.sex ?? '—'}</td>
+                    <td className="px-3 py-3 text-slate-400">{caso.nationality ?? '—'}</td>
                     <td className="px-3 py-3 text-slate-400">{caso.address ?? '—'}</td>
                     <td className="px-3 py-3 text-slate-400">{caso.neighborhood ?? '—'}</td>
                     <td className="px-3 py-3 text-slate-400">{caso.phone ?? '—'}</td>
@@ -262,7 +346,15 @@ export default function CasosNovos() {
                       {caso.received_date ? formatDate(caso.received_date) : '—'}
                     </td>
                     <td className="px-3 py-3 text-slate-400">{caso.origin ?? '—'}</td>
-                    <td className="px-3 py-3 text-slate-400">—</td>
+                    <td className="px-3 py-3">
+                      <button
+                        onClick={() => handleArquivar(caso.id)}
+                        className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                        title="Arquivar"
+                      >
+                        Arquivar
+                      </button>
+                    </td>
                     <td className="px-3 py-3">
                       <button className="text-xs text-indigo-400 hover:text-indigo-300 underline transition-colors">
                         Ver
@@ -270,6 +362,7 @@ export default function CasosNovos() {
                     </td>
                     <td className="px-3 py-3">
                       <button
+                        onClick={() => openEdit(caso)}
                         className="flex items-center justify-center size-7 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-400 hover:text-white transition-colors mx-auto"
                         title="Editar"
                       >
@@ -294,48 +387,49 @@ export default function CasosNovos() {
             </tbody>
           </table>
         </div>
+
+        {casosVisiveis.length > 0 && (
+          <div className="px-6 py-3 border-t border-slate-800">
+            <p className="text-xs text-slate-600">
+              {casosVisiveis.length} registro{casosVisiveis.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* ── Modal: Novo Registro ── */}
+      {/* ── Modal: Novo / Editar Registro ── */}
       <Modal
         open={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setForm(FORM_EMPTY);
-        }}
-        title="Novo Registro de Caso"
+        onClose={closeModal}
+        title={editingId !== null ? 'Editar Registro' : 'Novo Registro de Caso'}
         size="lg"
       >
         <div className="space-y-5">
-          {/* Puxar por código */}
-          <div className="rounded-xl bg-indigo-500/5 ring-1 ring-indigo-500/20 p-4 space-y-2">
-            <p className="text-xs font-semibold text-indigo-300 uppercase tracking-wide">
-              Puxar dados por código
-            </p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Digite o código do caso..."
-                value={form.codigoPuxar}
-                onChange={(e) => setField('codigoPuxar', e.target.value)}
-                className={cn(
-                  'flex-1 h-9 px-3 text-sm rounded-xl',
-                  'bg-slate-800 text-slate-200 placeholder:text-slate-500',
-                  'ring-1 ring-slate-700 focus:ring-indigo-500 outline-none transition-shadow',
-                )}
-              />
-              <Button variant="primary" size="sm">
-                <Search className="size-3.5 mr-1.5" />
-                Puxar Dados
-              </Button>
+          {editingId === null && (
+            <div className="rounded-xl bg-indigo-500/5 ring-1 ring-indigo-500/20 p-4 space-y-2">
+              <p className="text-xs font-semibold text-indigo-300 uppercase tracking-wide">
+                Puxar dados por código
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Digite o código do caso..."
+                  value={form.codigoPuxar}
+                  onChange={(e) => setField('codigoPuxar', e.target.value)}
+                  className={cn(
+                    'flex-1 h-9 px-3 text-sm rounded-xl',
+                    'bg-slate-800 text-slate-200 placeholder:text-slate-500',
+                    'ring-1 ring-slate-700 focus:ring-indigo-500 outline-none transition-shadow',
+                  )}
+                />
+                <Button variant="primary" size="sm">
+                  <Search className="size-3.5 mr-1.5" />
+                  Puxar Dados
+                </Button>
+              </div>
             </div>
-            <p className="text-[11px] text-indigo-400/70">
-              Nos preencherá automaticamente os campos abaixo com as informações do caso
-              correspondente.
-            </p>
-          </div>
+          )}
 
-          {/* Campos principais */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label="Nome Completo"
@@ -434,10 +528,9 @@ export default function CasosNovos() {
             />
           </div>
 
-          {/* Descrição */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-              Descrição Adicional / Motivo do Desligamento
+              Descrição Adicional
             </label>
             <textarea
               value={form.descricao}
@@ -451,19 +544,16 @@ export default function CasosNovos() {
             />
           </div>
 
-          {/* Ações */}
           <div className="flex justify-end gap-2 pt-1">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setModalOpen(false);
-                setForm(FORM_EMPTY);
-              }}
-            >
+            <Button variant="ghost" onClick={closeModal}>
               Cancelar
             </Button>
             <Button variant="primary" onClick={handleSalvar} disabled={saving}>
-              {saving ? 'Salvando...' : 'Salvar Registro Completo'}
+              {saving
+                ? 'Salvando...'
+                : editingId !== null
+                  ? 'Salvar Alterações'
+                  : 'Salvar Registro Completo'}
             </Button>
           </div>
         </div>

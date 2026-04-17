@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { useToast } from '@/components/ui/Toast';
 import { useCases } from '@/hooks/useCases';
 import { normalizeSearch } from '@/utils/normalizeSearch';
+import { type DbCase } from '@/lib/supabase';
 
 // ─── Tipos do formulário ─────────────────────────────────────────────────────
 
@@ -50,13 +52,36 @@ const FORM_EMPTY: ArquivarForm = {
 
 // ─── Componente ──────────────────────────────────────────────────────────────
 
+function casoToForm(c: DbCase): ArquivarForm {
+  return {
+    codigoPuxar: c.code ?? '',
+    nomeCompleto: c.name,
+    ano: c.year ? String(c.year) : '2026',
+    perfil: c.profile ?? 'PAEFI',
+    responsavel: c.responsible ?? '',
+    idade: c.age ? String(c.age) : '',
+    sexo: c.sex ?? 'Masculino (M)',
+    nacionalidade: c.nationality ?? 'Brasileira',
+    telefone: c.phone ?? '',
+    endereco: c.address ?? '',
+    bairro: c.neighborhood ?? '',
+    tipoViolencia: c.violence_type ?? '',
+    codigo: c.code ?? '',
+    dataArquivamento: '',
+    motivoDesligamento: c.description ?? '',
+    observacoes: '',
+  };
+}
+
 export default function Arquivados() {
   const [busca, setBusca] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<ArquivarForm>(FORM_EMPTY);
   const [saving, setSaving] = useState(false);
 
-  const { cases, loading, createCase } = useCases({ status: 'archived' });
+  const { cases, loading, createCase, updateCase } = useCases({ status: 'archived' });
+  const { success, error: toastError } = useToast();
 
   const casosVisiveis = cases.filter((c) =>
     normalizeSearch((c.name ?? '') + (c.code ?? '') + (c.cpf ?? '')).includes(
@@ -68,9 +93,26 @@ export default function Arquivados() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  function openEdit(caso: DbCase) {
+    setEditingId(caso.id);
+    setForm(casoToForm(caso));
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setEditingId(null);
+    setForm(FORM_EMPTY);
+  }
+
   async function handleSalvar() {
+    if (!form.nomeCompleto.trim()) {
+      toastError('Nome completo é obrigatório.');
+      return;
+    }
     setSaving(true);
-    await createCase({
+
+    const payload = {
       name: form.nomeCompleto,
       year: parseInt(form.ano, 10) || null,
       profile: form.perfil || null,
@@ -84,23 +126,41 @@ export default function Arquivados() {
       violence_type: form.tipoViolencia || null,
       code: form.codigo || null,
       description: form.motivoDesligamento || null,
-      status: 'archived',
-      cpf: null,
-      birth_date: null,
-      was_new: false,
-      category: null,
-      reference_month: null,
-      document_date: null,
-      received_date: null,
-      origin: null,
-      archived_month: null,
-      archived_year: parseInt(form.ano, 10) || null,
-      ultimo_relatorio: null,
-      user_id: null,
-    });
+    };
+
+    if (editingId !== null) {
+      const result = await updateCase(editingId, payload);
+      if (result.error) {
+        toastError('Erro ao atualizar: ' + result.error);
+      } else {
+        success('Registro atualizado com sucesso.');
+      }
+    } else {
+      const result = await createCase({
+        ...payload,
+        status: 'archived',
+        cpf: null,
+        birth_date: null,
+        was_new: false,
+        category: null,
+        reference_month: null,
+        document_date: null,
+        received_date: null,
+        origin: null,
+        archived_month: null,
+        archived_year: parseInt(form.ano, 10) || null,
+        ultimo_relatorio: null,
+        user_id: null,
+      });
+      if (result.error) {
+        toastError('Erro ao salvar: ' + result.error);
+      } else {
+        success('Registro salvo com sucesso.');
+      }
+    }
+
     setSaving(false);
-    setModalOpen(false);
-    setForm(FORM_EMPTY);
+    closeModal();
   }
 
   return (
@@ -229,6 +289,7 @@ export default function Arquivados() {
                       </td>
                       <td className="px-3 py-3">
                         <button
+                          onClick={() => openEdit(caso)}
                           className="flex items-center justify-center size-7 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-400 hover:text-white transition-colors mx-auto"
                           title="Editar"
                         >
@@ -268,11 +329,8 @@ export default function Arquivados() {
       {/* ── Modal: Arquivar Registro ── */}
       <Modal
         open={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setForm(FORM_EMPTY);
-        }}
-        title="Arquivar Registro de Caso"
+        onClose={closeModal}
+        title={editingId !== null ? 'Editar Registro Arquivado' : 'Arquivar Registro de Caso'}
         size="lg"
       >
         <div className="space-y-5">
@@ -402,17 +460,15 @@ export default function Arquivados() {
           </div>
 
           <div className="flex justify-end gap-2 pt-1">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setModalOpen(false);
-                setForm(FORM_EMPTY);
-              }}
-            >
+            <Button variant="ghost" onClick={closeModal}>
               Cancelar
             </Button>
             <Button variant="danger" onClick={handleSalvar} disabled={saving}>
-              {saving ? 'Salvando...' : 'Salvar Registro Completo'}
+              {saving
+                ? 'Salvando...'
+                : editingId !== null
+                  ? 'Salvar Alterações'
+                  : 'Salvar Registro Completo'}
             </Button>
           </div>
         </div>
